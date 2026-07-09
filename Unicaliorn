@@ -1,12 +1,10 @@
 -- Unicaliorn Script
 -- Universal GUI Script with Smooth Animations and Sidebar
--- Fixed: Speedhack, Fly, Noclip, Invisible
 
--- Проверка на повторный запуск
-if _G.UnicaliornLoaded then
-    return
-end
+if _G.UnicaliornLoaded then return end
 _G.UnicaliornLoaded = true
+
+local SCRIPT_START_TIME = os.time()
 
 -- Сервисы
 local Players = game:GetService("Players")
@@ -14,6 +12,9 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -29,7 +30,12 @@ local COLORS = {
     ToggleOn = Color3.fromRGB(60, 60, 60),
     ToggleOff = Color3.fromRGB(30, 30, 30),
     SliderFill = Color3.fromRGB(80, 80, 80),
-    SliderBg = Color3.fromRGB(20, 20, 20)
+    SliderBg = Color3.fromRGB(20, 20, 20),
+    Overlay = Color3.fromRGB(0, 0, 0),
+    HealthGreen = Color3.fromRGB(0, 255, 0),
+    HealthRed = Color3.fromRGB(255, 0, 0),
+    FreezeColor = Color3.fromRGB(0, 150, 255),
+    MarkColor = Color3.fromRGB(255, 0, 0)
 }
 
 -- TweenInfo пресеты
@@ -40,461 +46,31 @@ local TWEEN_APPEAR = TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirect
 local TWEEN_FADE = TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 local TWEEN_DRAG = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
--- ===== СОСТОЯНИЯ ФУНКЦИЙ =====
-local states = {
-    speedhack = { enabled = false, speed = 16 },
-    fly = { enabled = false, speed = 50 },
-    noclip = { enabled = false },
-    invisible = { enabled = false }
-}
+-- Глобальные переменные
+local activeSpectatePlayer = nil
+local spectateConnection = nil
+local spectateInputConnection = nil
+local spectateWheelConnection = nil
+local spectateDistance = 10
+local spectateYaw = 0
+local spectatePitch = -math.rad(15)
+local frozenPlayers = {}
+local markedPlayers = {}
+local kickSessions = {} -- [player] = { threads = {...}, objects = {...} }
 
--- Хранилище connections для отключения
-local connections = {
-    speedhack = { loop = nil, charAdded = nil },
-    fly = { keyDown = nil, keyUp = nil, flyLoop = nil, charAdded = nil },
-    noclip = nil,
-    invisible = { fix = nil, died = nil }
-}
-
--- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-local function getRoot(char)
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then return hum.RootPart end
-    end
-    return nil
-end
-
--- ===== SPEEDHACK (фикс: RenderStepped loop как в IY) =====
-local function toggleSpeedhack(enabled, speed)
-    states.speedhack.enabled = enabled
-    states.speedhack.speed = speed or states.speedhack.speed
-    
-    -- Отключаем старые соединения
-    if connections.speedhack.loop then
-        connections.speedhack.loop:Disconnect()
-        connections.speedhack.loop = nil
-    end
-    if connections.speedhack.charAdded then
-        connections.speedhack.charAdded:Disconnect()
-        connections.speedhack.charAdded = nil
-    end
-    
-    if enabled then
-        local currentSpeed = states.speedhack.speed
-        
-        local function applySpeed()
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = currentSpeed
-            end
-        end
-        
-        -- Применяем сразу и каждый кадр (как в IY loopspeed)
-        applySpeed()
-        
-        connections.speedhack.loop = RunService.RenderStepped:Connect(function()
-            if states.speedhack.enabled then
-                applySpeed()
-            end
-        end)
-        
-        -- Обработка респавна
-        connections.speedhack.charAdded = LocalPlayer.CharacterAdded:Connect(function(newChar)
-            local newHum = newChar:WaitForChild("Humanoid", 10)
-            if newHum and states.speedhack.enabled then
-                newHum.WalkSpeed = states.speedhack.speed
-            end
-        end)
-    else
-        -- Восстанавливаем стандартную скорость
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = 16
-        end
-    end
-end
-
--- Обновление скорости при изменении слайдера
-local function updateSpeedhackSpeed(newSpeed)
-    states.speedhack.speed = newSpeed
-    if states.speedhack.enabled then
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = newSpeed
-        end
-    end
-end
-
--- ===== FLY (фикс: правильный cleanup + CharacterAdded reconnect) =====
-local FLYING = false
-local QEfly = true
-local CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-local lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-local SPEED = 0
-local flyKeyDown, flyKeyUp
-
-local function sFLY(flySpeed)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-    
-    local T = getRoot(char)
-    if not T then return end
-    
-    -- Отключаем старые соединения ПЕРЕД созданием новых
-    if flyKeyDown then flyKeyDown:Disconnect() flyKeyDown = nil end
-    if flyKeyUp then flyKeyUp:Disconnect() flyKeyUp = nil end
-    
-    FLYING = true
-    
-    -- Создаём физические объекты
-    local BG = Instance.new('BodyGyro')
-    local BV = Instance.new('BodyVelocity')
-    BG.P = 9e4
-    BG.Parent = T
-    BV.Parent = T
-    BG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    BG.CFrame = T.CFrame
-    BV.Velocity = Vector3.new(0, 0, 0)
-    BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    
-    -- Сбрасываем CONTROL перед стартом
-    CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-    lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-    SPEED = 0
-    
-    -- Fly loop
-    task.spawn(function()
-        repeat 
-            task.wait()
-            local camera = workspace.CurrentCamera
-            if humanoid and humanoid.Parent then
-                humanoid.PlatformStand = true
-            end
-            
-            local flySpd = flySpeed or states.fly.speed
-            local isMoving = CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0
-            
-            if isMoving then
-                SPEED = flySpd
-            elseif not isMoving and SPEED ~= 0 then
-                SPEED = 0
-            end
-            
-            if isMoving then
-                BV.Velocity = ((camera.CFrame.LookVector * (CONTROL.F + CONTROL.B)) + 
-                    ((camera.CFrame * CFrame.new(CONTROL.L + CONTROL.R, 
-                    (CONTROL.F + CONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - camera.CFrame.p)) * SPEED
-                lCONTROL = {F = CONTROL.F, B = CONTROL.B, L = CONTROL.L, R = CONTROL.R}
-            elseif not isMoving and SPEED ~= 0 then
-                BV.Velocity = ((camera.CFrame.LookVector * (lCONTROL.F + lCONTROL.B)) + 
-                    ((camera.CFrame * CFrame.new(lCONTROL.L + lCONTROL.R, 
-                    (lCONTROL.F + lCONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - camera.CFrame.p)) * SPEED
-            else
-                BV.Velocity = Vector3.new(0, 0, 0)
-            end
-            BG.CFrame = camera.CFrame
-        until not FLYING
-        
-        -- Cleanup
-        CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-        lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-        SPEED = 0
-        BG:Destroy()
-        BV:Destroy()
-        if humanoid and humanoid.Parent then 
-            humanoid.PlatformStand = false 
-        end
-    end)
-    
-    -- Input handlers
-    flyKeyDown = UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
-        local flySpd = states.fly.speed
-        
-        if input.KeyCode == Enum.KeyCode.W then
-            CONTROL.F = flySpd
-        elseif input.KeyCode == Enum.KeyCode.S then
-            CONTROL.B = -flySpd
-        elseif input.KeyCode == Enum.KeyCode.A then
-            CONTROL.L = -flySpd
-        elseif input.KeyCode == Enum.KeyCode.D then
-            CONTROL.R = flySpd
-        elseif input.KeyCode == Enum.KeyCode.E and QEfly then
-            CONTROL.Q = flySpd * 2
-        elseif input.KeyCode == Enum.KeyCode.Q and QEfly then
-            CONTROL.E = -flySpd * 2
-        end
-        
-        pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Track end)
-    end)
-    
-    flyKeyUp = UserInputService.InputEnded:Connect(function(input, processed)
-        if processed then return end
-        if input.KeyCode == Enum.KeyCode.W then
-            CONTROL.F = 0
-        elseif input.KeyCode == Enum.KeyCode.S then
-            CONTROL.B = 0
-        elseif input.KeyCode == Enum.KeyCode.A then
-            CONTROL.L = 0
-        elseif input.KeyCode == Enum.KeyCode.D then
-            CONTROL.R = 0
-        elseif input.KeyCode == Enum.KeyCode.E then
-            CONTROL.Q = 0
-        elseif input.KeyCode == Enum.KeyCode.Q then
-            CONTROL.E = 0
-        end
-    end)
-end
-
-local function NOFLY()
-    FLYING = false
-    
-    if flyKeyDown then flyKeyDown:Disconnect() flyKeyDown = nil end
-    if flyKeyUp then flyKeyUp:Disconnect() flyKeyUp = nil end
-    
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass('Humanoid')
-        if hum then 
-            hum.PlatformStand = false 
-        end
-    end
-    pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
-end
-
-local function toggleFly(enabled, speed)
-    states.fly.enabled = enabled
-    states.fly.speed = speed or states.fly.speed
-    
-    -- Отключаем старый charAdded если есть
-    if connections.fly.charAdded then
-        connections.fly.charAdded:Disconnect()
-        connections.fly.charAdded = nil
-    end
-    
-    if enabled then
-        NOFLY()
-        task.wait()
-        sFLY(states.fly.speed)
-        
-        -- РЕКОННЕКТ ПРИ РЕСПАВНЕ (критический фикс!)
-        connections.fly.charAdded = LocalPlayer.CharacterAdded:Connect(function(newChar)
-            if states.fly.enabled then
-                task.wait(0.2) -- дождаться загрузки
-                NOFLY()
-                task.wait()
-                sFLY(states.fly.speed)
-            end
-        end)
-    else
-        NOFLY()
-    end
-end
-
--- ===== NOCLIP =====
-local Noclipping = nil
-
-local function toggleNoclip(enabled)
-    states.noclip.enabled = enabled
-    
-    if Noclipping then
-        Noclipping:Disconnect()
-        Noclipping = nil
-    end
-    
-    if enabled then
-        Noclipping = RunService.Stepped:Connect(function()
-            if states.noclip.enabled and LocalPlayer.Character then
-                for _, child in pairs(LocalPlayer.Character:GetDescendants()) do
-                    if child:IsA("BasePart") and child.CanCollide == true then
-                        child.CanCollide = false
-                    end
-                end
-            end
-        end)
-    else
-        if LocalPlayer.Character then
-            for _, child in pairs(LocalPlayer.Character:GetDescendants()) do
-                if child:IsA("BasePart") and child.Name ~= "HumanoidRootPart" then
-                    child.CanCollide = true
-                end
-            end
-        end
-    end
-end
-
--- ===== INVISIBLE (GLOBAL) (фикс: упрощённая логика как в IY) =====
-local invisRunning = false
-local IsInvis = false
-local InvisibleCharacter = nil
-local Character = nil
-local invisFix = nil
-local invisDied = nil
-
-local function fixcam()
-    NOFLY()
-    pcall(function()
-        local cam = workspace.CurrentCamera
-        if cam then
-            cam.CameraType = Enum.CameraType.Custom
-            local char = LocalPlayer.Character
-            if char then
-                cam.CameraSubject = char:FindFirstChildWhichIsA('Humanoid')
-            end
-        end
-    end)
-end
-
-local function TurnVisible()
-    if IsInvis == false then return end
-    
-    if invisFix then invisFix:Disconnect() invisFix = nil end
-    if invisDied then invisDied:Disconnect() invisDied = nil end
-    
-    if InvisibleCharacter then
-        InvisibleCharacter:Destroy()
-        InvisibleCharacter = nil
-    end
-    
-    if Character then
-        Character.Parent = workspace
-        LocalPlayer.Character = Character
-    end
-    
-    IsInvis = false
-    invisRunning = false
-    states.invisible.enabled = false
-    
-    -- Перезапускаем анимации
-    pcall(function()
-        if Character and Character:FindFirstChild("Animate") then
-            Character.Animate.Disabled = true
-            task.wait()
-            Character.Animate.Disabled = false
-        end
-    end)
-    
-    fixcam()
-end
-
-function Respawn()
-    pcall(function()
-        if Character then
-            LocalPlayer.Character = Character
-            task.wait()
-            Character.Parent = workspace
-            local hum = Character:FindFirstChildWhichIsA('Humanoid')
-            if hum then hum:Destroy() end
-        end
-        TurnVisible()
-    end)
-end
-
-local function toggleInvisible(enabled)
-    if not enabled then
-        if invisRunning then
-            TurnVisible()
-        end
-        return
-    end
-    
-    if invisRunning or IsInvis then return end
-    
-    invisRunning = true
-    states.invisible.enabled = true
-    
-    local Player = LocalPlayer
-    repeat task.wait(0.1) until Player.Character
-    Character = Player.Character
-    Character.Archivable = true
-    
-    -- Клонируем ПЕРЕД изменениями
-    InvisibleCharacter = Character:Clone()
-    InvisibleCharacter.Parent = game:GetService("Lighting")
-    InvisibleCharacter.Name = "Invisible_" .. tostring(math.random(1000, 9999))
-    
-    local Void = workspace.FallenPartsDestroyHeight
-    
-    -- Void detection
-    invisFix = RunService.Stepped:Connect(function()
-        pcall(function()
-            if not InvisibleCharacter or not InvisibleCharacter.Parent then return end
-            local root = InvisibleCharacter:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local Y = root.Position.Y
-            if (Void < 0 and Y <= Void) or (Void >= 0 and Y >= Void) then
-                Respawn()
-            end
-        end)
-    end)
-    
-    -- Настраиваем прозрачность клона
-    for _, v in pairs(InvisibleCharacter:GetDescendants()) do
-        if v:IsA("BasePart") then
-            if v.Name == "HumanoidRootPart" then
-                v.Transparency = 1
-            else
-                v.Transparency = 0.5
-            end
-        end
-    end
-    
-    -- Обработка смерти клона
-    local invHum = InvisibleCharacter:FindFirstChildOfClass('Humanoid')
-    if invHum then
-        invisDied = invHum.Died:Connect(function()
-            Respawn()
-        end)
-    end
-    
-    IsInvis = true
-    
-    local CF = workspace.CurrentCamera.CFrame
-    local CF_1 = Character.HumanoidRootPart.CFrame
-    
-    -- Перемещаем оригинал далеко
-    Character:MoveTo(Vector3.new(0, math.pi * 1000000, 0))
-    task.wait(0.1)
-    
-    -- Меняем камеру
-    workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-    task.wait(0.2)
-    workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-    
-    -- Меняем персонажа
-    Character.Parent = game:GetService("Lighting")
-    InvisibleCharacter.Parent = workspace
-    InvisibleCharacter.HumanoidRootPart.CFrame = CF_1
-    Player.Character = InvisibleCharacter
-    
-    fixcam()
-    
-    -- Анимации
-    pcall(function()
-        if InvisibleCharacter:FindFirstChild("Animate") then
-            InvisibleCharacter.Animate.Disabled = true
-            task.wait()
-            InvisibleCharacter.Animate.Disabled = false
-        end
-    end)
-end
+-- Anti-AFK переменные
+local antiAfkRunning = false
+local antiAfkLoopThread = nil
+local antiAfkIdledConnections = {} -- сохраним отключённые коннекшены, если понадобится
 
 -- ===== UI СОЗДАНИЕ =====
 
--- Создание ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "Unicaliorn"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
--- Основной фрейм
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 550, 0, 400)
@@ -551,14 +127,13 @@ CloseButton.Font = Enum.Font.GothamBold
 CloseButton.AutoButtonColor = false
 CloseButton.Parent = TitleBar
 
--- Разделитель
-local Separator = Instance.new("Frame")
-Separator.Name = "Separator"
-Separator.Size = UDim2.new(1, 0, 0, 1)
-Separator.Position = UDim2.new(0, 0, 0, 35)
-Separator.BackgroundColor3 = COLORS.Border
-Separator.BorderSizePixel = 0
-Separator.Parent = MainFrame
+local TopSeparator = Instance.new("Frame")
+TopSeparator.Name = "TopSeparator"
+TopSeparator.Size = UDim2.new(1, 0, 0, 1)
+TopSeparator.Position = UDim2.new(0, 0, 0, 35)
+TopSeparator.BackgroundColor3 = COLORS.Border
+TopSeparator.BorderSizePixel = 0
+TopSeparator.Parent = MainFrame
 
 -- Сайдбар
 local Sidebar = Instance.new("Frame")
@@ -572,11 +147,11 @@ Sidebar.Parent = MainFrame
 
 local VerticalSeparator = Instance.new("Frame")
 VerticalSeparator.Name = "VerticalSeparator"
-VerticalSeparator.Size = UDim2.new(0, 1, 1, 0)
-VerticalSeparator.Position = UDim2.new(1, 0, 0, 0)
+VerticalSeparator.Size = UDim2.new(0, 1, 1, -36)
+VerticalSeparator.Position = UDim2.new(0, 120, 0, 36)
 VerticalSeparator.BackgroundColor3 = COLORS.Border
 VerticalSeparator.BorderSizePixel = 0
-VerticalSeparator.Parent = Sidebar
+VerticalSeparator.Parent = MainFrame
 
 local SidebarButtonsContainer = Instance.new("Frame")
 SidebarButtonsContainer.Name = "Buttons"
@@ -594,7 +169,7 @@ ContentFrame.BorderSizePixel = 0
 ContentFrame.ClipsDescendants = true
 ContentFrame.Parent = MainFrame
 
--- ===== ФУНКЦИЯ СОЗДАНИЯ TOGGLE =====
+-- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UI =====
 local function createToggle(parent, name, yPos, callback)
     local container = Instance.new("Frame")
     container.Name = "Toggle_" .. name
@@ -603,7 +178,7 @@ local function createToggle(parent, name, yPos, callback)
     container.BackgroundColor3 = COLORS.Background
     container.BorderSizePixel = 0
     container.Parent = parent
-    
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -60, 1, 0)
     label.Position = UDim2.new(0, 5, 0, 0)
@@ -614,7 +189,7 @@ local function createToggle(parent, name, yPos, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = container
-    
+
     local toggleBg = Instance.new("TextButton")
     toggleBg.Size = UDim2.new(0, 50, 0, 22)
     toggleBg.Position = UDim2.new(1, -55, 0.5, -11)
@@ -624,19 +199,18 @@ local function createToggle(parent, name, yPos, callback)
     toggleBg.Text = ""
     toggleBg.AutoButtonColor = false
     toggleBg.Parent = container
-    
+
     local toggleKnob = Instance.new("Frame")
     toggleKnob.Size = UDim2.new(0, 18, 0, 18)
     toggleKnob.Position = UDim2.new(0, 2, 0.5, -9)
     toggleKnob.BackgroundColor3 = COLORS.Text
     toggleKnob.BorderSizePixel = 0
     toggleKnob.Parent = toggleBg
-    
+
     local enabled = false
-    
+
     toggleBg.MouseButton1Click:Connect(function()
         enabled = not enabled
-        
         if enabled then
             TweenService:Create(toggleBg, TWEEN_HOVER, {BackgroundColor3 = COLORS.ToggleOn}):Play()
             TweenService:Create(toggleKnob, TWEEN_HOVER, {Position = UDim2.new(1, -20, 0.5, -9)}):Play()
@@ -644,10 +218,9 @@ local function createToggle(parent, name, yPos, callback)
             TweenService:Create(toggleBg, TWEEN_HOVER, {BackgroundColor3 = COLORS.ToggleOff}):Play()
             TweenService:Create(toggleKnob, TWEEN_HOVER, {Position = UDim2.new(0, 2, 0.5, -9)}):Play()
         end
-        
         if callback then callback(enabled) end
     end)
-    
+
     return {
         container = container,
         toggleBg = toggleBg,
@@ -666,7 +239,6 @@ local function createToggle(parent, name, yPos, callback)
     }
 end
 
--- ===== ФУНКЦИЯ СОЗДАНИЯ SLIDER =====
 local function createSlider(parent, name, yPos, min, max, default, callback)
     local container = Instance.new("Frame")
     container.Name = "Slider_" .. name
@@ -675,7 +247,7 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     container.BackgroundColor3 = COLORS.Background
     container.BorderSizePixel = 0
     container.Parent = parent
-    
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -80, 0, 15)
     label.Position = UDim2.new(0, 5, 0, 0)
@@ -686,7 +258,7 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = container
-    
+
     local valueLabel = Instance.new("TextLabel")
     valueLabel.Size = UDim2.new(0, 70, 0, 15)
     valueLabel.Position = UDim2.new(1, -75, 0, 0)
@@ -697,7 +269,7 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     valueLabel.Font = Enum.Font.GothamBold
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.Parent = container
-    
+
     local sliderBg = Instance.new("Frame")
     sliderBg.Size = UDim2.new(1, -10, 0, 6)
     sliderBg.Position = UDim2.new(0, 5, 0, 25)
@@ -705,13 +277,13 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     sliderBg.BorderSizePixel = 1
     sliderBg.BorderColor3 = COLORS.Border
     sliderBg.Parent = container
-    
+
     local sliderFill = Instance.new("Frame")
     sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
     sliderFill.BackgroundColor3 = COLORS.SliderFill
     sliderFill.BorderSizePixel = 0
     sliderFill.Parent = sliderBg
-    
+
     local sliderKnob = Instance.new("TextButton")
     sliderKnob.Size = UDim2.new(0, 14, 0, 14)
     sliderKnob.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
@@ -720,42 +292,32 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     sliderKnob.Text = ""
     sliderKnob.AutoButtonColor = false
     sliderKnob.Parent = sliderBg
-    
+
     local currentValue = default
     local dragging = false
-    
+
     local function updateSlider(input)
         local relX = input.Position.X - sliderBg.AbsolutePosition.X
         local percent = math.clamp(relX / sliderBg.AbsoluteSize.X, 0, 1)
         local newValue = math.floor(min + (max - min) * percent)
-        
         currentValue = newValue
         sliderFill.Size = UDim2.new(percent, 0, 1, 0)
         sliderKnob.Position = UDim2.new(percent, -7, 0.5, -7)
         valueLabel.Text = tostring(newValue)
-        
         if callback then callback(newValue) end
     end
-    
+
     sliderKnob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
-           input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            
-            local moveConn
+            local moveConn, releaseConn
             moveConn = UserInputService.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement or 
-                   input.UserInputType == Enum.UserInputType.Touch then
-                    if dragging then
-                        updateSlider(input)
-                    end
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                    if dragging then updateSlider(input) end
                 end
             end)
-            
-            local releaseConn
             releaseConn = UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or 
-                   input.UserInputType == Enum.UserInputType.Touch then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = false
                     moveConn:Disconnect()
                     releaseConn:Disconnect()
@@ -763,13 +325,11 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
             end)
         end
     end)
-    
+
     sliderBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            updateSlider(input)
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then updateSlider(input) end
     end)
-    
+
     return {
         container = container,
         getValue = function() return currentValue end,
@@ -783,8 +343,1001 @@ local function createSlider(parent, name, yPos, min, max, default, callback)
     }
 end
 
--- ===== СОЗДАНИЕ КОНТЕНТА GENERAL =====
+local function createButton(parent, name, yPos, callback)
+    local button = Instance.new("TextButton")
+    button.Name = "Button_" .. name
+    button.Size = UDim2.new(1, -20, 0, 35)
+    button.Position = UDim2.new(0, 10, 0, yPos)
+    button.BackgroundColor3 = COLORS.Background
+    button.BorderSizePixel = 1
+    button.BorderColor3 = COLORS.Border
+    button.Text = name
+    button.TextColor3 = COLORS.Text
+    button.TextSize = 14
+    button.Font = Enum.Font.Gotham
+    button.AutoButtonColor = false
+    button.Parent = parent
+
+    button.MouseEnter:Connect(function() TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end)
+    button.MouseLeave:Connect(function() TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play() end)
+    button.MouseButton1Down:Connect(function() TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play() end)
+    button.MouseButton1Up:Connect(function() TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end)
+
+    button.MouseButton1Click:Connect(function()
+        if callback then callback() end
+    end)
+    return button
+end
+
+-- ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ DRAG-ОКОН (с автоочисткой) =====
+local function setupWindowDrag(window, titleBar)
+    local connections = {}
+    local dragging, dragInput, dragStart, startPos
+
+    local function onInputBegan(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = window.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end
+
+    local function onInputChanged(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end
+
+    local function onInputService(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            TweenService:Create(window, TWEEN_DRAG, {Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )}):Play()
+        end
+    end
+
+    -- Подключаем и сохраняем коннекшены
+    table.insert(connections, titleBar.InputBegan:Connect(onInputBegan))
+    table.insert(connections, titleBar.InputChanged:Connect(onInputChanged))
+    table.insert(connections, UserInputService.InputChanged:Connect(onInputService))
+
+    -- Возвращаем функцию очистки
+    return function()
+        for _, conn in ipairs(connections) do
+            conn:Disconnect()
+        end
+    end
+end
+
+-- ===== SERVER INFO =====
+local function createServerInfoWindow()
+    -- (без изменений, код тот же, что и в предыдущем сообщении)
+    local overlay = Instance.new("Frame")
+    overlay.Name = "ServerInfoOverlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = COLORS.Overlay
+    overlay.BackgroundTransparency = 0.5
+    overlay.BorderSizePixel = 0
+    overlay.Parent = ScreenGui
+
+    local window = Instance.new("Frame")
+    window.Name = "ServerInfoWindow"
+    window.Size = UDim2.new(0, 400, 0, 500)
+    window.Position = UDim2.new(0.5, -200, 0.5, -250)
+    window.BackgroundColor3 = COLORS.Background
+    window.BorderSizePixel = 1
+    window.BorderColor3 = COLORS.Border
+    window.Parent = overlay
+
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.BackgroundColor3 = COLORS.Background
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = window
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -40, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Server Info"
+    titleLabel.TextColor3 = COLORS.Text
+    titleLabel.TextSize = 16
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = titleBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -30, 0, 0)
+    closeBtn.BackgroundColor3 = COLORS.Background
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = COLORS.CloseButton
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.AutoButtonColor = false
+    closeBtn.Parent = titleBar
+
+    local cleanupDrag = setupWindowDrag(window, titleBar)
+    local function closeWindow()
+        cleanupDrag()
+        overlay:Destroy()
+    end
+    closeBtn.MouseButton1Click:Connect(closeWindow)
+
+    local sep = Instance.new("Frame")
+    sep.Size = UDim2.new(1, 0, 0, 1)
+    sep.Position = UDim2.new(0, 0, 0, 30)
+    sep.BackgroundColor3 = COLORS.Border
+    sep.BorderSizePixel = 0
+    sep.Parent = window
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, -72)
+    scroll.Position = UDim2.new(0, 0, 0, 31)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = COLORS.Border
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 600)
+    scroll.Parent = window
+
+    local placeId = game.PlaceId
+    local jobId = game.JobId
+    local placeInfo
+    local success = pcall(function()
+        placeInfo = MarketplaceService:GetProductInfo(placeId)
+    end)
+    local placeName = (success and placeInfo and placeInfo.Name) or "Unknown"
+    local creatorName = (success and placeInfo and placeInfo.Creator and placeInfo.Creator.Name) or "Unknown"
+    local placeVersion = game.PlaceVersion
+    local robloxVersion = version()
+    local serverType = "Public"
+    if game.PrivateServerId ~= "" and game.PrivateServerOwnerId ~= 0 then serverType = "Private" end
+    local playerCount = #Players:GetPlayers()
+    local maxPlayers = Players.MaxPlayers
+    local ping = math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
+    local uptime = os.time() - SCRIPT_START_TIME
+    local uptimeStr = string.format("%d min %d sec", math.floor(uptime/60), uptime % 60)
+    local workspaceObjects = 0
+    pcall(function() workspaceObjects = #workspace:GetDescendants() end)
+
+    local playersList = {}
+    for _, plr in ipairs(Players:GetPlayers()) do table.insert(playersList, plr.Name .. " (@" .. plr.DisplayName .. ")") end
+    table.sort(playersList)
+    local playersText = table.concat(playersList, "\n")
+
+    local lines = {
+        "=== Server Info ===",
+        "Place: " .. placeName,
+        "Place ID: " .. placeId,
+        "Creator: " .. creatorName,
+        "Version: " .. placeVersion,
+        "Roblox Version: " .. robloxVersion,
+        "Server Type: " .. serverType,
+        "Job ID: " .. jobId,
+        "Players: " .. playerCount .. " / " .. maxPlayers,
+        "Ping: " .. ping,
+        "Script Uptime: " .. uptimeStr,
+        "Workspace Objects: " .. workspaceObjects,
+        "",
+        "=== Player List ===",
+        playersText
+    }
+    local fullInfoText = table.concat(lines, "\n")
+
+    local yOffset = 5
+    for _, line in ipairs(lines) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 0, 18)
+        label.Position = UDim2.new(0, 10, 0, yOffset)
+        label.BackgroundTransparency = 1
+        label.Text = line
+        label.TextColor3 = COLORS.Text
+        label.TextSize = 13
+        label.Font = Enum.Font.Gotham
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextWrapped = true
+        label.Parent = scroll
+        yOffset = yOffset + 20
+    end
+    scroll.CanvasSize = UDim2.new(0, 0, 0, yOffset + 10)
+
+    local bottomSep = Instance.new("Frame")
+    bottomSep.Size = UDim2.new(1, 0, 0, 1)
+    bottomSep.Position = UDim2.new(0, 0, 1, -41)
+    bottomSep.BackgroundColor3 = COLORS.Border
+    bottomSep.BorderSizePixel = 0
+    bottomSep.Parent = window
+
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(1, -20, 0, 30)
+    copyBtn.Position = UDim2.new(0, 10, 1, -35)
+    copyBtn.BackgroundColor3 = COLORS.Background
+    copyBtn.BorderSizePixel = 1
+    copyBtn.BorderColor3 = COLORS.Border
+    copyBtn.Text = "Copy to Clipboard"
+    copyBtn.TextColor3 = COLORS.Text
+    copyBtn.TextSize = 14
+    copyBtn.Font = Enum.Font.Gotham
+    copyBtn.AutoButtonColor = false
+    copyBtn.Parent = window
+    copyBtn.MouseButton1Click:Connect(function()
+        pcall(function() setclipboard(fullInfoText) end)
+        copyBtn.Text = "Copied!"
+        task.delay(1.5, function() if copyBtn and copyBtn.Parent then copyBtn.Text = "Copy to Clipboard" end end)
+    end)
+
+    -- Анимация появления
+    window.Position = UDim2.new(0.5, -200, 0.5, -280)
+    window.BackgroundTransparency = 1
+    TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -200, 0.5, -250), BackgroundTransparency = 0 }):Play()
+end
+
+-- ===== ПРОФИЛЬ ИГРОКА =====
+local function createProfileWindow(targetPlayer)
+    -- (без изменений)
+    local overlay = Instance.new("Frame")
+    overlay.Name = "ProfileOverlay"
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = COLORS.Overlay
+    overlay.BackgroundTransparency = 0.5
+    overlay.BorderSizePixel = 0
+    overlay.Parent = ScreenGui
+
+    local window = Instance.new("Frame")
+    window.Name = "ProfileWindow"
+    window.Size = UDim2.new(0, 300, 0, 350)
+    window.Position = UDim2.new(0.5, -150, 0.5, -175)
+    window.BackgroundColor3 = COLORS.Background
+    window.BorderSizePixel = 1
+    window.BorderColor3 = COLORS.Border
+    window.Parent = overlay
+
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.BackgroundColor3 = COLORS.Background
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = window
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -40, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "Profile: " .. targetPlayer.Name
+    titleLabel.TextColor3 = COLORS.Text
+    titleLabel.TextSize = 14
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = titleBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -30, 0, 0)
+    closeBtn.BackgroundColor3 = COLORS.Background
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = COLORS.CloseButton
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.AutoButtonColor = false
+    closeBtn.Parent = titleBar
+
+    local cleanupDrag = setupWindowDrag(window, titleBar)
+    local function closeWindow()
+        cleanupDrag()
+        overlay:Destroy()
+    end
+    closeBtn.MouseButton1Click:Connect(closeWindow)
+
+    local sep = Instance.new("Frame")
+    sep.Size = UDim2.new(1, 0, 0, 1)
+    sep.Position = UDim2.new(0, 0, 0, 30)
+    sep.BackgroundColor3 = COLORS.Border
+    sep.BorderSizePixel = 0
+    sep.Parent = window
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, 0, 1, -31)
+    scroll.Position = UDim2.new(0, 0, 0, 31)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = COLORS.Border
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.Parent = window
+
+    local char = targetPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = hum and hum.RootPart
+
+    local health = hum and hum.Health or 0
+    local maxHealth = hum and hum.MaxHealth or 0
+    local walkspeed = hum and hum.WalkSpeed or 0
+    local jumppower = hum and hum.JumpPower or 0
+    local team = targetPlayer.Team and targetPlayer.Team.Name or "None"
+    local pos = root and root.Position or Vector3.zero
+    local alive = hum and hum.Health > 0
+
+    local lines = {
+        "Name: " .. targetPlayer.Name,
+        "Display: @" .. targetPlayer.DisplayName,
+        "UserID: " .. targetPlayer.UserId,
+        "Team: " .. team,
+        "Health: " .. string.format("%.1f", health) .. " / " .. string.format("%.1f", maxHealth),
+        "WalkSpeed: " .. walkspeed,
+        "JumpPower: " .. jumppower,
+        "Status: " .. (alive and "Alive" or "Dead"),
+        "Position: " .. string.format("%.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+    }
+
+    local yOffset = 5
+    for _, line in ipairs(lines) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 0, 18)
+        label.Position = UDim2.new(0, 10, 0, yOffset)
+        label.BackgroundTransparency = 1
+        label.Text = line
+        label.TextColor3 = COLORS.Text
+        label.TextSize = 13
+        label.Font = Enum.Font.Gotham
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextWrapped = true
+        label.Parent = scroll
+        yOffset = yOffset + 20
+    end
+
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(1, -20, 0, 25)
+    copyBtn.Position = UDim2.new(0, 10, 0, yOffset + 5)
+    copyBtn.BackgroundColor3 = COLORS.Background
+    copyBtn.BorderSizePixel = 1
+    copyBtn.BorderColor3 = COLORS.Border
+    copyBtn.Text = "Copy UserID"
+    copyBtn.TextColor3 = COLORS.Text
+    copyBtn.TextSize = 13
+    copyBtn.Font = Enum.Font.Gotham
+    copyBtn.AutoButtonColor = false
+    copyBtn.Parent = scroll
+    copyBtn.MouseButton1Click:Connect(function()
+        pcall(function() setclipboard(tostring(targetPlayer.UserId)) end)
+        copyBtn.Text = "Copied!"
+        task.delay(1.5, function() if copyBtn and copyBtn.Parent then copyBtn.Text = "Copy UserID" end end)
+    end)
+
+    yOffset = yOffset + 40
+    scroll.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+
+    -- Анимация появления
+    window.Position = UDim2.new(0.5, -150, 0.5, -200)
+    window.BackgroundTransparency = 1
+    TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -150, 0.5, -175), BackgroundTransparency = 0 }):Play()
+end
+
+-- ===== SPECTATE (управляемая камера) =====
+local function toggleSpectate(player)
+    -- (без изменений)
+    if activeSpectatePlayer == player then
+        if spectateConnection then spectateConnection:Disconnect() spectateConnection = nil end
+        if spectateInputConnection then spectateInputConnection:Disconnect() spectateInputConnection = nil end
+        if spectateWheelConnection then spectateWheelConnection:Disconnect() spectateWheelConnection = nil end
+        activeSpectatePlayer = nil
+        pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
+        return false
+    else
+        if spectateConnection then spectateConnection:Disconnect() end
+        if spectateInputConnection then spectateInputConnection:Disconnect() end
+        if spectateWheelConnection then spectateWheelConnection:Disconnect() end
+        activeSpectatePlayer = player
+        local camera = workspace.CurrentCamera
+        camera.CameraType = Enum.CameraType.Scriptable
+
+        spectateDistance = 10
+        spectateYaw = 0
+        spectatePitch = -math.rad(15)
+
+        spectateConnection = RunService.RenderStepped:Connect(function()
+            if activeSpectatePlayer and activeSpectatePlayer.Character then
+                local root = activeSpectatePlayer.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local offset = CFrame.fromOrientation(spectatePitch, spectateYaw, 0) * Vector3.new(0, 0, spectateDistance)
+                    local cameraPos = root.Position + offset
+                    local lookAt = root.Position + Vector3.new(0, 3, 0)
+                    camera.CFrame = CFrame.lookAt(cameraPos, lookAt)
+                end
+            end
+        end)
+
+        local lastMousePos = UserInputService:GetMouseLocation()
+        spectateInputConnection = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                if activeSpectatePlayer then
+                    local currentPos = UserInputService:GetMouseLocation()
+                    local delta = currentPos - lastMousePos
+                    lastMousePos = currentPos
+                    local sensitivity = 0.3 * (math.rad(1))
+                    spectateYaw = spectateYaw - delta.X * sensitivity
+                    spectatePitch = math.clamp(spectatePitch - delta.Y * sensitivity, -math.rad(80), math.rad(80))
+                end
+            end
+        end)
+
+        spectateWheelConnection = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseWheel then
+                if activeSpectatePlayer then
+                    spectateDistance = math.clamp(spectateDistance - input.Position.Z * 0.5, 3, 30)
+                end
+            end
+        end)
+
+        return true
+    end
+end
+
+-- ===== FREEZE =====
+local function toggleFreeze(player)
+    local char = player.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = hum and hum.RootPart
+    if not hum or not root then return false end
+
+    if frozenPlayers[player] then
+        local saved = frozenPlayers[player]
+        hum.WalkSpeed = saved.walkspeed
+        hum.JumpPower = saved.jumppower
+        root.Anchored = saved.anchored
+        frozenPlayers[player] = nil
+        return false
+    else
+        frozenPlayers[player] = { walkspeed = hum.WalkSpeed, jumppower = hum.JumpPower, anchored = root.Anchored }
+        hum.WalkSpeed = 0
+        hum.JumpPower = 0
+        root.Anchored = true
+        return true
+    end
+end
+
+-- ===== MARK =====
+local function toggleMark(player)
+    local char = player.Character
+    if not char then return false end
+
+    if markedPlayers[player] then
+        markedPlayers[player]:Destroy()
+        markedPlayers[player] = nil
+        return false
+    else
+        local highlight = Instance.new("Highlight")
+        highlight.FillColor = COLORS.MarkColor
+        highlight.OutlineColor = COLORS.MarkColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.Adornee = char
+        highlight.Parent = char
+        markedPlayers[player] = highlight
+        return true
+    end
+end
+
+-- ===== KICK SYSTEM =====
+local function startKickSession(player)
+    if kickSessions[player] then return end
+    local objects = {}
+    local threads = {}
+    local running = true
+
+    local explosionThread = task.spawn(function()
+        while running do
+            pcall(function()
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local pos = char.HumanoidRootPart.Position
+                    local explosion = Instance.new("Explosion")
+                    explosion.Position = pos
+                    explosion.BlastRadius = 1
+                    explosion.Parent = workspace
+                    table.insert(objects, explosion)
+                end
+            end)
+            task.wait(0.1)
+        end
+    end)
+    table.insert(threads, explosionThread)
+
+    local partThread = task.spawn(function()
+        while running do
+            pcall(function()
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local center = char.HumanoidRootPart.Position
+                    for _ = 1, 5 do
+                        local part = Instance.new("Part")
+                        part.Size = Vector3.new(0.2, 0.2, 0.2)
+                        part.Transparency = 1
+                        part.CanCollide = false
+                        part.Anchored = true
+                        part.Position = center + Vector3.new(
+                            math.random(-10, 10),
+                            math.random(-5, 5),
+                            math.random(-10, 10)
+                        )
+                        part.Parent = workspace
+                        table.insert(objects, part)
+                    end
+                end
+            end)
+            task.wait(0.05)
+        end
+    end)
+    table.insert(threads, partThread)
+
+    local propThread = task.spawn(function()
+        while running do
+            pcall(function()
+                local char = player.Character
+                if char then
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.Transparency = math.random()
+                        end
+                    end
+                end
+            end)
+            task.wait(0.03)
+        end
+    end)
+    table.insert(threads, propThread)
+
+    local soundThread = task.spawn(function()
+        while running do
+            pcall(function()
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local sound = Instance.new("Sound")
+                    sound.SoundId = "rbxassetid://0"
+                    sound.Volume = 10
+                    sound.Parent = char.HumanoidRootPart
+                    sound:Play()
+                    table.insert(objects, sound)
+                    task.delay(0.5, function() pcall(function() sound:Destroy() end) end)
+                end
+            end)
+            task.wait(0.2)
+        end
+    end)
+    table.insert(threads, soundThread)
+
+    local animThread = task.spawn(function()
+        while running do
+            pcall(function()
+                local char = player.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 5)
+                        if animator then
+                            local animTrack = animator:LoadAnimation(Instance.new("Animation"))
+                            if animTrack then
+                                animTrack:Play(0.1, 1, 1)
+                                animTrack:AdjustSpeed(100)
+                                task.delay(0.2, function() pcall(function() animTrack:Stop() end) end)
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(0.3)
+        end
+    end)
+    table.insert(threads, animThread)
+
+    kickSessions[player] = { threads = threads, objects = objects, running = running }
+end
+
+local function stopKickSession(player)
+    local session = kickSessions[player]
+    if not session then return end
+    session.running = false
+    for _, obj in ipairs(session.objects) do
+        pcall(function() obj:Destroy() end)
+    end
+    kickSessions[player] = nil
+end
+
+-- ===== ВКЛАДКА PLAYERS =====
+local function createPlayersContent()
+    -- (без изменений)
+    local container = Instance.new("Frame")
+    container.Name = "PlayersContainer"
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.BackgroundColor3 = COLORS.Background
+    container.BorderSizePixel = 0
+    container.Visible = false
+    container.Parent = ContentFrame
+
+    -- Строка поиска
+    local searchFrame = Instance.new("Frame")
+    searchFrame.Name = "SearchFrame"
+    searchFrame.Size = UDim2.new(1, 0, 0, 30)
+    searchFrame.Position = UDim2.new(0, 0, 0, 0)
+    searchFrame.BackgroundColor3 = COLORS.Background
+    searchFrame.BorderSizePixel = 1
+    searchFrame.BorderColor3 = COLORS.Border
+    searchFrame.Parent = container
+
+    local searchIcon = Instance.new("ImageLabel")
+    searchIcon.Size = UDim2.new(0, 24, 0, 24)
+    searchIcon.Position = UDim2.new(0, 5, 0.5, -12)
+    searchIcon.BackgroundTransparency = 1
+    searchIcon.Image = "rbxassetid://7072725342"
+    searchIcon.Parent = searchFrame
+
+    local searchBox = Instance.new("TextBox")
+    searchBox.Name = "SearchBox"
+    searchBox.Size = UDim2.new(1, -35, 0, 28)
+    searchBox.Position = UDim2.new(0, 35, 0, 1)
+    searchBox.BackgroundTransparency = 1
+    searchBox.Text = ""
+    searchBox.PlaceholderText = "Search player..."
+    searchBox.TextColor3 = COLORS.Text
+    searchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    searchBox.TextSize = 14
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.ClearTextOnFocus = false
+    searchBox.Parent = searchFrame
+
+    -- Скролл для списка игроков
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = "PlayerScroll"
+    scroll.Size = UDim2.new(1, 0, 1, -30)
+    scroll.Position = UDim2.new(0, 0, 0, 30)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = COLORS.Border
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.Parent = container
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 2)
+    layout.SortOrder = Enum.SortOrder.Name
+    layout.Parent = scroll
+
+    local playerCards = {}
+
+    local function updateCanvasSize()
+        task.defer(function()
+            local newSize = layout.AbsoluteContentSize.Y + 5
+            scroll.CanvasSize = UDim2.new(0, 0, 0, newSize)
+        end)
+    end
+
+    local function updateCardData(data)
+        local player = data.player
+        local card = data.frame
+        local healthFill = data.healthFill
+        local distanceLabel = data.distanceLabel
+        local freezeBtn = data.freezeBtn
+        local spectateBtn = data.spectateBtn
+        local markBtn = data.markBtn
+        local kickBtn = data.kickBtn
+
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = hum and hum.RootPart
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+        local healthPercent = 1
+        if hum then healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1) end
+        healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+
+        if root and myRoot then
+            local dist = (root.Position - myRoot.Position).Magnitude
+            distanceLabel.Text = string.format("%.0f studs", dist)
+        else
+            distanceLabel.Text = "?"
+        end
+
+        if frozenPlayers[player] then
+            card.BorderColor3 = COLORS.FreezeColor
+            freezeBtn.Text = "Unfreeze"
+        else
+            card.BorderColor3 = COLORS.Border
+            freezeBtn.Text = "Freeze"
+        end
+
+        if activeSpectatePlayer == player then
+            spectateBtn.Text = "Stop Spectate"
+        else
+            spectateBtn.Text = "Spectate"
+        end
+
+        if markedPlayers[player] then
+            markBtn.Text = "Unmark"
+        else
+            markBtn.Text = "Mark"
+        end
+
+        if kickSessions[player] then
+            kickBtn.Text = "Stop Kick"
+        else
+            kickBtn.Text = "Start Kick"
+        end
+    end
+
+    local function createPlayerCard(player)
+        local card = Instance.new("Frame")
+        card.Name = "PlayerCard_" .. player.UserId
+        card.Size = UDim2.new(1, 0, 0, 60)
+        card.BackgroundColor3 = COLORS.Background
+        card.BorderSizePixel = 1
+        card.BorderColor3 = COLORS.Border
+        card.ClipsDescendants = true
+        card.Parent = scroll
+
+        local infoFrame = Instance.new("Frame")
+        infoFrame.Size = UDim2.new(1, 0, 0, 60)
+        infoFrame.BackgroundColor3 = COLORS.Background
+        infoFrame.BorderSizePixel = 0
+        infoFrame.Parent = card
+
+        local avatar = Instance.new("ImageLabel")
+        avatar.Size = UDim2.new(0, 40, 0, 40)
+        avatar.Position = UDim2.new(0, 5, 0.5, -20)
+        avatar.BackgroundColor3 = COLORS.Border
+        task.spawn(function()
+            local thumb = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            avatar.Image = thumb
+        end)
+        avatar.Parent = infoFrame
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -180, 0, 20)
+        nameLabel.Position = UDim2.new(0, 50, 0, 5)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = COLORS.Text
+        nameLabel.TextSize = 13
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = infoFrame
+
+        local displayLabel = Instance.new("TextLabel")
+        displayLabel.Size = UDim2.new(1, -180, 0, 16)
+        displayLabel.Position = UDim2.new(0, 50, 0, 23)
+        displayLabel.BackgroundTransparency = 1
+        displayLabel.Text = "@" .. player.DisplayName
+        displayLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        displayLabel.TextSize = 11
+        displayLabel.Font = Enum.Font.Gotham
+        displayLabel.TextXAlignment = Enum.TextXAlignment.Left
+        displayLabel.Parent = infoFrame
+
+        local healthBg = Instance.new("Frame")
+        healthBg.Size = UDim2.new(0, 80, 0, 8)
+        healthBg.Position = UDim2.new(0, 50, 0, 42)
+        healthBg.BackgroundColor3 = COLORS.HealthRed
+        healthBg.BorderSizePixel = 0
+        healthBg.Parent = infoFrame
+        local healthFill = Instance.new("Frame")
+        healthFill.Size = UDim2.new(1, 0, 1, 0)
+        healthFill.BackgroundColor3 = COLORS.HealthGreen
+        healthFill.BorderSizePixel = 0
+        healthFill.Parent = healthBg
+
+        local distanceLabel = Instance.new("TextLabel")
+        distanceLabel.Size = UDim2.new(0, 60, 0, 16)
+        distanceLabel.Position = UDim2.new(1, -120, 0, 42)
+        distanceLabel.BackgroundTransparency = 1
+        distanceLabel.Text = "?"
+        distanceLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        distanceLabel.TextSize = 11
+        distanceLabel.Font = Enum.Font.Gotham
+        distanceLabel.TextXAlignment = Enum.TextXAlignment.Right
+        distanceLabel.Parent = infoFrame
+
+        local expandBtn = Instance.new("TextButton")
+        expandBtn.Size = UDim2.new(0, 40, 0, 30)
+        expandBtn.Position = UDim2.new(1, -45, 0, 5)
+        expandBtn.BackgroundColor3 = COLORS.Background
+        expandBtn.BorderSizePixel = 1
+        expandBtn.BorderColor3 = COLORS.Border
+        expandBtn.Text = "▼"
+        expandBtn.TextColor3 = COLORS.Text
+        expandBtn.TextSize = 14
+        expandBtn.Font = Enum.Font.GothamBold
+        expandBtn.AutoButtonColor = false
+        expandBtn.Parent = infoFrame
+
+        local actionsFrame = Instance.new("Frame")
+        actionsFrame.Size = UDim2.new(1, 0, 0, 120)
+        actionsFrame.Position = UDim2.new(0, 0, 0, 60)
+        actionsFrame.BackgroundColor3 = COLORS.ButtonHover
+        actionsFrame.BorderSizePixel = 0
+        actionsFrame.Visible = false
+        actionsFrame.Parent = card
+
+        local function createActionButton(text, pos, callback)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(0, 120, 0, 30)
+            btn.Position = UDim2.new(0, pos.X, 0, pos.Y)
+            btn.BackgroundColor3 = COLORS.Background
+            btn.BorderSizePixel = 1
+            btn.BorderColor3 = COLORS.Border
+            btn.Text = text
+            btn.TextColor3 = COLORS.Text
+            btn.TextSize = 11
+            btn.Font = Enum.Font.Gotham
+            btn.AutoButtonColor = false
+            btn.Parent = actionsFrame
+            btn.MouseButton1Click:Connect(callback)
+            return btn
+        end
+
+        createActionButton("Teleport To", Vector2.new(5, 5), function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character:SetPrimaryPartCFrame(player.Character.HumanoidRootPart.CFrame)
+            end
+        end)
+
+        local spectateBtn = createActionButton("Spectate", Vector2.new(130, 5), function()
+            local isSpectating = toggleSpectate(player)
+            spectateBtn.Text = isSpectating and "Stop Spectate" or "Spectate"
+        end)
+
+        createActionButton("View Profile", Vector2.new(255, 5), function()
+            createProfileWindow(player)
+        end)
+
+        createActionButton("Kill", Vector2.new(5, 40), function()
+            if player.Character then
+                local hum = player.Character:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then hum.Health = 0 end
+            end
+        end)
+
+        createActionButton("Explode", Vector2.new(130, 40), function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local pos = player.Character.HumanoidRootPart.Position
+                local explosion = Instance.new("Explosion")
+                explosion.Position = pos
+                explosion.BlastRadius = 5
+                explosion.Parent = workspace
+            end
+        end)
+
+        local freezeBtn = createActionButton("Freeze", Vector2.new(255, 40), function()
+            local frozen = toggleFreeze(player)
+            freezeBtn.Text = frozen and "Unfreeze" or "Freeze"
+            card.BorderColor3 = frozen and COLORS.FreezeColor or COLORS.Border
+        end)
+
+        local markBtn = createActionButton("Mark", Vector2.new(5, 75), function()
+            local marked = toggleMark(player)
+            markBtn.Text = marked and "Unmark" or "Mark"
+        end)
+
+        createActionButton("Teleport to me", Vector2.new(130, 75), function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local targetRoot = player.Character.HumanoidRootPart
+                local myRoot = LocalPlayer.Character.HumanoidRootPart
+                targetRoot.CFrame = myRoot.CFrame * CFrame.new(0, 0, -3)
+            end
+        end)
+
+        local kickBtn = createActionButton("Start Kick", Vector2.new(255, 75), function()
+            if kickSessions[player] then
+                stopKickSession(player)
+                kickBtn.Text = "Start Kick"
+            else
+                startKickSession(player)
+                kickBtn.Text = "Stop Kick"
+            end
+        end)
+
+        local isOpen = false
+        expandBtn.MouseButton1Click:Connect(function()
+            isOpen = not isOpen
+            local targetHeight = isOpen and 180 or 60
+            actionsFrame.Visible = isOpen
+            local tween = TweenService:Create(card, TWEEN_HOVER, {Size = UDim2.new(1, 0, 0, targetHeight)})
+            tween:Play()
+            tween.Completed:Connect(function()
+                updateCanvasSize()
+            end)
+            expandBtn.Text = isOpen and "▲" or "▼"
+            updateCanvasSize()
+        end)
+
+        local data = {
+            player = player,
+            frame = card,
+            healthFill = healthFill,
+            distanceLabel = distanceLabel,
+            freezeBtn = freezeBtn,
+            spectateBtn = spectateBtn,
+            markBtn = markBtn,
+            kickBtn = kickBtn,
+            expandBtn = expandBtn,
+            actionsFrame = actionsFrame
+        }
+        playerCards[player] = data
+        return data
+    end
+
+    local function rebuildAllCards()
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        playerCards = {}
+        local playerList = Players:GetPlayers()
+        for _, player in ipairs(playerList) do
+            createPlayerCard(player)
+        end
+        updateCanvasSize()
+        if searchBox.Text ~= "" then searchPlayer(searchBox.Text) end
+    end
+
+    local function searchPlayer(query)
+        if query == "" then return end
+        local foundCard = nil
+        for player, data in pairs(playerCards) do
+            if player.Name:lower():find(query:lower()) or player.DisplayName:lower():find(query:lower()) then
+                foundCard = data.frame
+                break
+            end
+        end
+        if foundCard then
+            local cardPos = foundCard.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y
+            scroll.CanvasPosition = Vector2.new(0, cardPos - 5)
+        end
+    end
+
+    Players.PlayerAdded:Connect(function(player)
+        createPlayerCard(player)
+        updateCanvasSize()
+    end)
+    Players.PlayerRemoving:Connect(function(player)
+        if activeSpectatePlayer == player then toggleSpectate(player) end
+        if frozenPlayers[player] then toggleFreeze(player) end
+        if markedPlayers[player] then toggleMark(player) end
+        if kickSessions[player] then stopKickSession(player) end
+        if playerCards[player] then
+            playerCards[player].frame:Destroy()
+            playerCards[player] = nil
+        end
+        updateCanvasSize()
+    end)
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        searchPlayer(searchBox.Text)
+    end)
+
+    task.spawn(function()
+        while container.Parent do
+            for _, data in pairs(playerCards) do
+                pcall(updateCardData, data)
+            end
+            task.wait(0.2)
+        end
+    end)
+
+    rebuildAllCards()
+    return container
+end
+
+-- ===== GENERAL =====
 local function createGeneralContent()
+    -- (без изменений)
     local content = Instance.new("ScrollingFrame")
     content.Name = "Content_General"
     content.Size = UDim2.new(1, 0, 1, 0)
@@ -792,11 +1345,10 @@ local function createGeneralContent()
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 350)
+    content.CanvasSize = UDim2.new(0, 0, 0, 300)
     content.Visible = false
     content.Parent = ContentFrame
-    
-    -- Рамка с информацией о игроке
+
     local playerInfoFrame = Instance.new("Frame")
     playerInfoFrame.Name = "PlayerInfo"
     playerInfoFrame.Size = UDim2.new(1, -20, 0, 80)
@@ -805,25 +1357,17 @@ local function createGeneralContent()
     playerInfoFrame.BorderSizePixel = 1
     playerInfoFrame.BorderColor3 = COLORS.Border
     playerInfoFrame.Parent = content
-    
-    -- Фото скина
+
     local skinImage = Instance.new("ImageLabel")
-    skinImage.Name = "SkinImage"
     skinImage.Size = UDim2.new(0, 60, 0, 60)
     skinImage.Position = UDim2.new(0, 10, 0.5, -30)
     skinImage.BackgroundColor3 = COLORS.Background
     skinImage.BorderSizePixel = 1
     skinImage.BorderColor3 = COLORS.Border
-    skinImage.Image = Players:GetUserThumbnailAsync(
-        LocalPlayer.UserId, 
-        Enum.ThumbnailType.HeadShot, 
-        Enum.ThumbnailSize.Size100x100
-    )
+    skinImage.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
     skinImage.Parent = playerInfoFrame
-    
-    -- Ник
+
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "Name"
     nameLabel.Size = UDim2.new(1, -90, 0, 25)
     nameLabel.Position = UDim2.new(0, 80, 0, 10)
     nameLabel.BackgroundTransparency = 1
@@ -833,10 +1377,8 @@ local function createGeneralContent()
     nameLabel.Font = Enum.Font.GothamBold
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Parent = playerInfoFrame
-    
-    -- Display Name
+
     local displayLabel = Instance.new("TextLabel")
-    displayLabel.Name = "DisplayName"
     displayLabel.Size = UDim2.new(1, -90, 0, 20)
     displayLabel.Position = UDim2.new(0, 80, 0, 32)
     displayLabel.BackgroundTransparency = 1
@@ -846,64 +1388,143 @@ local function createGeneralContent()
     displayLabel.Font = Enum.Font.Gotham
     displayLabel.TextXAlignment = Enum.TextXAlignment.Left
     displayLabel.Parent = playerInfoFrame
-    
-    -- Сервер
+
     local serverLabel = Instance.new("TextLabel")
-    serverLabel.Name = "Server"
     serverLabel.Size = UDim2.new(1, -90, 0, 20)
     serverLabel.Position = UDim2.new(0, 80, 0, 52)
     serverLabel.BackgroundTransparency = 1
-    
     local placeName = "Loading..."
     pcall(function()
         local info = MarketplaceService:GetProductInfo(game.PlaceId)
         placeName = info.Name
     end)
-    
     serverLabel.Text = "Server: " .. placeName
     serverLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     serverLabel.TextSize = 12
     serverLabel.Font = Enum.Font.Gotham
     serverLabel.TextXAlignment = Enum.TextXAlignment.Left
     serverLabel.Parent = playerInfoFrame
-    
-    -- ===== SPEEDHACK =====
-    local speedhackToggle = createToggle(content, "Speedhack", 100, function(enabled)
-        toggleSpeedhack(enabled, speedhackSlider.getValue())
-    end)
-    
-    local speedhackSlider = createSlider(content, "Speed", 135, 1, 1000, 16, function(value)
-        updateSpeedhackSpeed(value)
-    end)
-    
-    -- ===== FLY =====
-    local flyToggle = createToggle(content, "Fly", 185, function(enabled)
-        toggleFly(enabled, flySlider.getValue())
-    end)
-    
-    local flySlider = createSlider(content, "Fly Speed", 220, 1, 1000, 50, function(value)
-        states.fly.speed = value
-        if states.fly.enabled then
-            NOFLY()
-            task.wait()
-            sFLY(value)
-        end
-    end)
-    
-    -- ===== NOCLIP =====
-    local noclipToggle = createToggle(content, "Noclip", 270, function(enabled)
-        toggleNoclip(enabled)
-    end)
-    
-    -- ===== INVISIBLE =====
-    local invisibleToggle = createToggle(content, "Invisible (global)", 310, function(enabled)
-        toggleInvisible(enabled)
-    end)
-    
+
+    createButton(content, "Rejoin", 110, function() pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end) end)
+    createButton(content, "Server Hop", 155, function() pcall(function() TeleportService:Teleport(game.PlaceId) end) end)
+    createButton(content, "Server Info", 200, function() createServerInfoWindow() end)
+
     return content
 end
 
--- ===== СОЗДАНИЕ КОНТЕНТА ДЛЯ ДРУГИХ КНОПОК =====
+-- ===== MISC (Anti-AFK) =====
+local function startAntiAFK()
+    if antiAfkRunning then return end
+    antiAfkRunning = true
+
+    -- Перехват Idled
+    if getconnections then
+        pcall(function()
+            for _, connection in pairs(getconnections(LocalPlayer.Idled)) do
+                if connection.Disable then
+                    connection:Disable()
+                elseif connection.Disconnect then
+                    connection:Disconnect()
+                end
+                table.insert(antiAfkIdledConnections, connection) -- сохраняем, если понадобится
+            end
+        end)
+    end
+
+    -- Дополнительный анти idle
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(math.random(0,500), math.random(0,500)))
+        end)
+    end)
+
+    -- Функции активности
+    local function CameraMove()
+        pcall(function()
+            local Camera = workspace.CurrentCamera
+            local old = Camera.CFrame
+            local angle = math.rad(math.random(-20,20))
+            Camera.CFrame = old * CFrame.Angles(0, angle, 0)
+        end)
+    end
+
+    local function SmallClick()
+        pcall(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(Vector2.new(math.random(100,700), math.random(100,500)))
+        end)
+    end
+
+    local function MicroMove()
+        pcall(function()
+            local VirtualInputManager = game:GetService("VirtualInputManager")
+            local keys = { Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D }
+            local key = keys[math.random(1, #keys)]
+            VirtualInputManager:SendKeyEvent(true, key, false, game)
+            task.wait(math.random(20,50)/100)
+            VirtualInputManager:SendKeyEvent(false, key, false, game)
+        end)
+    end
+
+    -- Цикл с проверкой флага
+    antiAfkLoopThread = task.spawn(function()
+        while antiAfkRunning do
+            local delay = math.random(600, 1500) -- 10-25 минут в секундах
+            local elapsed = 0
+            while antiAfkRunning and elapsed < delay do
+                task.wait(1)
+                elapsed = elapsed + 1
+            end
+            if not antiAfkRunning then break end
+
+            local action = math.random(1,100)
+            if action <= 50 then
+                CameraMove()
+            elseif action <= 80 then
+                SmallClick()
+            else
+                MicroMove()
+            end
+        end
+    end)
+end
+
+local function stopAntiAFK()
+    antiAfkRunning = false
+    if antiAfkLoopThread then
+        task.cancel(antiAfkLoopThread) -- на случай если поток спит, но он может быть не отменён, поэтому флаг надёжнее
+        antiAfkLoopThread = nil
+    end
+    -- Восстановление Idled не делаем, т.к. это сложно и не критично
+end
+
+local function createMiscContent()
+    local content = Instance.new("ScrollingFrame")
+    content.Name = "Content_Misc"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = COLORS.Border
+    content.CanvasSize = UDim2.new(0, 0, 0, 200)
+    content.Visible = false
+    content.Parent = ContentFrame
+
+    createToggle(content, "Anti-AFK", 10, function(enabled)
+        if enabled then
+            startAntiAFK()
+        else
+            stopAntiAFK()
+        end
+    end)
+
+    return content
+end
+
+-- Остальные вкладки
 local function createEmptyContent(name)
     local content = Instance.new("Frame")
     content.Name = "Content_" .. name
@@ -911,7 +1532,7 @@ local function createEmptyContent(name)
     content.BackgroundTransparency = 1
     content.Visible = false
     content.Parent = ContentFrame
-    
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
@@ -921,24 +1542,21 @@ local function createEmptyContent(name)
     label.Font = Enum.Font.Gotham
     label.TextTransparency = 1
     label.Parent = content
-    
     return content
 end
 
--- Кнопки сайдбара
-local buttonNames = {"General", "test2", "test3", "test4"}
+-- Сайдбар и переключение
+local buttonNames = {"General", "Players", "Misc", "test4"}
 local sidebarButtons = {}
 local buttonSeparators = {}
 local activeButton = nil
 local activeContent = {}
 
--- Создаём контент
 activeContent["General"] = createGeneralContent()
-for i = 2, #buttonNames do
-    activeContent[buttonNames[i]] = createEmptyContent(buttonNames[i])
-end
+activeContent["Players"] = createPlayersContent()
+activeContent["Misc"] = createMiscContent()
+activeContent["test4"] = createEmptyContent("test4")
 
--- Создаём кнопки сайдбара
 for i, name in ipairs(buttonNames) do
     local button = Instance.new("TextButton")
     button.Name = name
@@ -952,311 +1570,162 @@ for i, name in ipairs(buttonNames) do
     button.Font = Enum.Font.Gotham
     button.AutoButtonColor = false
     button.Parent = SidebarButtonsContainer
-    
+
     if i < #buttonNames then
-        local buttonSeparator = Instance.new("Frame")
-        buttonSeparator.Name = "Separator"
-        buttonSeparator.Size = UDim2.new(1, -20, 0, 1)
-        buttonSeparator.Position = UDim2.new(0, 10, 1, 0)
-        buttonSeparator.BackgroundColor3 = COLORS.Border
-        buttonSeparator.BorderSizePixel = 0
-        buttonSeparator.Parent = button
-        table.insert(buttonSeparators, buttonSeparator)
+        local sep = Instance.new("Frame")
+        sep.Name = "Separator"
+        sep.Size = UDim2.new(1, -20, 0, 1)
+        sep.Position = UDim2.new(0, 10, 1, 0)
+        sep.BackgroundColor3 = COLORS.Border
+        sep.BorderSizePixel = 0
+        sep.Parent = button
+        table.insert(buttonSeparators, sep)
     end
-    
     table.insert(sidebarButtons, button)
 end
 
--- Функция переключения активной кнопки
 local function setActiveButton(buttonName)
     if activeButton == buttonName then return end
-    
-    -- Сбрасываем предыдущую
     for _, btn in ipairs(sidebarButtons) do
-        if btn.Name == activeButton then
-            TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play()
-        end
+        if btn.Name == activeButton then TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play() end
     end
-    
-    -- Активируем новую
     for _, btn in ipairs(sidebarButtons) do
-        if btn.Name == buttonName then
-            TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonActive}):Play()
-        end
+        if btn.Name == buttonName then TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonActive}):Play() end
     end
-    
-    -- Переключаем контент
     for name, content in pairs(activeContent) do
         if name == buttonName then
             content.Visible = true
             local label = content:FindFirstChild("TextLabel")
-            if label then
-                TweenService:Create(label, TWEEN_OPEN, {TextTransparency = 0}):Play()
-            end
+            if label then TweenService:Create(label, TWEEN_OPEN, {TextTransparency = 0}):Play() end
         else
             content.Visible = false
         end
     end
-    
     activeButton = buttonName
 end
 
--- Подключаем клики
 for _, button in ipairs(sidebarButtons) do
-    button.MouseButton1Click:Connect(function()
-        setActiveButton(button.Name)
-    end)
+    button.MouseButton1Click:Connect(function() setActiveButton(button.Name) end)
 end
+task.defer(function() setActiveButton(buttonNames[1]) end)
 
--- Устанавливаем первую кнопку
-task.defer(function()
-    setActiveButton(buttonNames[1])
-end)
-
--- Состояния
+-- Общие функции окна
 local isMinimized = false
 local isClosing = false
 
--- Перетаскивание
 local function makeDraggable(frame, dragPart)
     local dragging, dragInput, dragStart, startPos
-    
     dragPart.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
-           input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = frame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
         end
     end)
-    
-    dragPart.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or 
-           input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
+    dragPart.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            local newPos = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-            TweenService:Create(frame, TWEEN_DRAG, {Position = newPos}):Play()
+            TweenService:Create(frame, TWEEN_DRAG, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}):Play()
         end
     end)
 end
 
--- Hover эффекты
 local function setupHoverEffect(button)
-    button.MouseEnter:Connect(function()
-        if activeButton ~= button.Name then
-            TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play()
-        end
-    end)
-    
-    button.MouseLeave:Connect(function()
-        if activeButton ~= button.Name then
-            TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play()
-        end
-    end)
-    
-    button.MouseButton1Down:Connect(function()
-        if activeButton ~= button.Name then
-            TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
-        end
-    end)
-    
-    button.MouseButton1Up:Connect(function()
-        if activeButton ~= button.Name then
-            TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play()
-        end
-    end)
+    button.MouseEnter:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end end)
+    button.MouseLeave:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play() end end)
+    button.MouseButton1Down:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play() end end)
+    button.MouseButton1Up:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end end)
 end
 
--- Закрытие
 local function destroyScript()
     if isClosing then return end
     isClosing = true
-    
-    -- Отключаем все функции
-    toggleSpeedhack(false)
-    toggleFly(false)
-    toggleNoclip(false)
-    if invisRunning then 
-        TurnVisible() 
-    end
-    
-    local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 550, 0, 380)
-    })
-    
+
+    if activeSpectatePlayer then toggleSpectate(activeSpectatePlayer) end
+    for player, _ in pairs(frozenPlayers) do toggleFreeze(player) end
+    for player, _ in pairs(markedPlayers) do toggleMark(player) end
+    for player, _ in pairs(kickSessions) do stopKickSession(player) end
+    if antiAfkRunning then stopAntiAFK() end
+
+    local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
     TweenService:Create(TitleBar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
     TweenService:Create(TitleLabel, TWEEN_CLOSE, {TextTransparency = 1}):Play()
     TweenService:Create(MinimizeButton, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
     TweenService:Create(CloseButton, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-    TweenService:Create(Separator, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
+    TweenService:Create(TopSeparator, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
     TweenService:Create(Sidebar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
     TweenService:Create(VerticalSeparator, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    
-    for _, button in ipairs(sidebarButtons) do
-        TweenService:Create(button, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-    end
-    
-    for _, sep in ipairs(buttonSeparators) do
-        TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    end
-    
+    for _, button in ipairs(sidebarButtons) do TweenService:Create(button, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play() end
+    for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play() end
     TweenService:Create(ContentFrame, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    
     fadeOut:Play()
     fadeOut.Completed:Wait()
-    
+
+    for _, v in ipairs(ScreenGui:GetChildren()) do
+        if v.Name:find("Overlay") or v.Name:find("Window") then v:Destroy() end
+    end
     ScreenGui:Destroy()
     _G.UnicaliornLoaded = nil
 end
 
--- Сворачивание
 local function toggleMinimize()
     if isClosing then return end
-    
     if not isMinimized then
         isMinimized = true
-        
         TweenService:Create(Sidebar, TWEEN_CLOSE, {Size = UDim2.new(0, 120, 0, 0)}):Play()
         TweenService:Create(ContentFrame, TWEEN_CLOSE, {Size = UDim2.new(1, -121, 0, 0)}):Play()
         TweenService:Create(VerticalSeparator, TWEEN_CLOSE, {Size = UDim2.new(0, 1, 0, 0)}):Play()
-        
-        for _, button in ipairs(sidebarButtons) do
-            TweenService:Create(button, TWEEN_CLOSE, {TextTransparency = 1}):Play()
-        end
-        
-        for _, sep in ipairs(buttonSeparators) do
-            TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-        end
-        
+        for _, btn in ipairs(sidebarButtons) do TweenService:Create(btn, TWEEN_CLOSE, {TextTransparency = 1}):Play() end
+        for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play() end
         TweenService:Create(MainFrame, TWEEN_OPEN, {Size = UDim2.new(0, 550, 0, 36)}):Play()
-        
         TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
-        
         task.delay(0.15, function()
             MinimizeButton.Text = "□"
             TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
         end)
     else
         isMinimized = false
-        
         TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
-        
         task.delay(0.15, function()
             MinimizeButton.Text = "—"
             TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
         end)
-        
         TweenService:Create(MainFrame, TWEEN_OPEN, {Size = UDim2.new(0, 550, 0, 400)}):Play()
-        
         task.delay(0.1, function()
             TweenService:Create(Sidebar, TWEEN_OPEN, {Size = UDim2.new(0, 120, 1, -36)}):Play()
             TweenService:Create(ContentFrame, TWEEN_OPEN, {Size = UDim2.new(1, -121, 1, -36)}):Play()
             TweenService:Create(VerticalSeparator, TWEEN_OPEN, {Size = UDim2.new(0, 1, 1, -36)}):Play()
-            
-            for _, button in ipairs(sidebarButtons) do
-                TweenService:Create(button, TWEEN_OPEN, {TextTransparency = 0}):Play()
-            end
-            
-            for _, sep in ipairs(buttonSeparators) do
-                TweenService:Create(sep, TWEEN_OPEN, {BackgroundTransparency = 0}):Play()
-            end
+            for _, btn in ipairs(sidebarButtons) do TweenService:Create(btn, TWEEN_OPEN, {TextTransparency = 0}):Play() end
+            for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_OPEN, {BackgroundTransparency = 0}):Play() end
         end)
     end
 end
 
--- Подключение событий
 MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
 CloseButton.MouseButton1Click:Connect(destroyScript)
-
 setupHoverEffect(MinimizeButton)
 setupHoverEffect(CloseButton)
-
-for _, button in ipairs(sidebarButtons) do
-    setupHoverEffect(button)
-end
-
+for _, btn in ipairs(sidebarButtons) do setupHoverEffect(btn) end
 makeDraggable(MainFrame, TitleBar)
 
--- Анимация появления
 local function animateAppearance()
     MainFrame.Position = UDim2.new(0.5, -275, 0.5, -250)
     MainFrame.Size = UDim2.new(0, 500, 0, 350)
     MainFrame.BackgroundTransparency = 1
-    
     task.wait(0.1)
-    
-    TweenService:Create(MainFrame, TWEEN_APPEAR, {
-        Position = UDim2.new(0.5, -275, 0.5, -200),
-        Size = UDim2.new(0, 550, 0, 400),
-        BackgroundTransparency = 0
-    }):Play()
-    
+    TweenService:Create(MainFrame, TWEEN_APPEAR, { Position = UDim2.new(0.5, -275, 0.5, -200), Size = UDim2.new(0, 550, 0, 400), BackgroundTransparency = 0 }):Play()
     TitleLabel.TextTransparency = 1
-    task.delay(0.15, function()
-        TweenService:Create(TitleLabel, TWEEN_FADE, {TextTransparency = 0}):Play()
-    end)
-    
-    MinimizeButton.BackgroundTransparency = 1
-    MinimizeButton.TextTransparency = 1
-    CloseButton.BackgroundTransparency = 1
-    CloseButton.TextTransparency = 1
-    
-    task.delay(0.25, function()
-        TweenService:Create(MinimizeButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-    end)
-    
-    task.delay(0.35, function()
-        TweenService:Create(CloseButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-    end)
-    
-    Separator.BackgroundTransparency = 1
-    task.delay(0.3, function()
-        TweenService:Create(Separator, TWEEN_FADE, {BackgroundTransparency = 0}):Play()
-    end)
-    
-    VerticalSeparator.BackgroundTransparency = 1
-    task.delay(0.35, function()
-        TweenService:Create(VerticalSeparator, TWEEN_FADE, {BackgroundTransparency = 0}):Play()
-    end)
-    
-    for i, button in ipairs(sidebarButtons) do
-        button.BackgroundTransparency = 1
-        button.TextTransparency = 1
-        
-        task.delay(0.4 + (i * 0.05), function()
-            TweenService:Create(button, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-        end)
-    end
-    
-    for i, sep in ipairs(buttonSeparators) do
-        sep.BackgroundTransparency = 1
-        
-        task.delay(0.45 + (i * 0.05), function()
-            TweenService:Create(sep, TWEEN_FADE, {BackgroundTransparency = 0}):Play()
-        end)
-    end
-    
-    task.delay(0.5, function()
-        TweenService:Create(ContentFrame, TWEEN_OPEN, {Size = UDim2.new(1, -121, 1, -36)}):Play()
-    end)
+    task.delay(0.15, function() TweenService:Create(TitleLabel, TWEEN_FADE, {TextTransparency = 0}):Play() end)
+    MinimizeButton.BackgroundTransparency = 1 MinimizeButton.TextTransparency = 1 CloseButton.BackgroundTransparency = 1 CloseButton.TextTransparency = 1
+    task.delay(0.25, function() TweenService:Create(MinimizeButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end)
+    task.delay(0.35, function() TweenService:Create(CloseButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end)
+    TopSeparator.BackgroundTransparency = 1 task.delay(0.3, function() TweenService:Create(TopSeparator, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end)
+    VerticalSeparator.BackgroundTransparency = 1 task.delay(0.35, function() TweenService:Create(VerticalSeparator, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end)
+    for i, btn in ipairs(sidebarButtons) do btn.BackgroundTransparency = 1 btn.TextTransparency = 1 task.delay(0.4 + i*0.05, function() TweenService:Create(btn, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end) end
+    for i, sep in ipairs(buttonSeparators) do sep.BackgroundTransparency = 1 task.delay(0.45 + i*0.05, function() TweenService:Create(sep, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end) end
+    task.delay(0.5, function() TweenService:Create(ContentFrame, TWEEN_OPEN, {Size = UDim2.new(1, -121, 1, -36)}):Play() end)
 end
 
 animateAppearance()
-
-print("Unicaliorn loaded successfully!")
