@@ -5,6 +5,7 @@ if _G.UnicaliornLoaded then return end
 _G.UnicaliornLoaded = true
 
 local SCRIPT_START_TIME = os.time()
+print("[Unicaliorn] Initializing...")
 
 -- Сервисы
 local Players = game:GetService("Players")
@@ -34,7 +35,6 @@ local COLORS = {
     Overlay = Color3.fromRGB(0, 0, 0),
     HealthGreen = Color3.fromRGB(0, 255, 0),
     HealthRed = Color3.fromRGB(255, 0, 0),
-    FreezeColor = Color3.fromRGB(0, 150, 255),
     MarkColor = Color3.fromRGB(255, 0, 0)
 }
 
@@ -54,14 +54,11 @@ local spectateWheelConnection = nil
 local spectateDistance = 10
 local spectateYaw = 0
 local spectatePitch = -math.rad(15)
-local frozenPlayers = {}
 local markedPlayers = {}
-local kickSessions = {} -- [player] = { threads = {...}, objects = {...} }
 
 -- Anti-AFK переменные
 local antiAfkRunning = false
 local antiAfkLoopThread = nil
-local antiAfkIdledConnections = {} -- сохраним отключённые коннекшены, если понадобится
 
 -- ===== UI СОЗДАНИЕ =====
 
@@ -70,6 +67,7 @@ ScreenGui.Name = "Unicaliorn"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
+print("[Unicaliorn] GUI created.")
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -369,7 +367,7 @@ local function createButton(parent, name, yPos, callback)
     return button
 end
 
--- ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ DRAG-ОКОН (с автоочисткой) =====
+-- ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ DRAG-ОКОН =====
 local function setupWindowDrag(window, titleBar)
     local connections = {}
     local dragging, dragInput, dragStart, startPos
@@ -403,12 +401,10 @@ local function setupWindowDrag(window, titleBar)
         end
     end
 
-    -- Подключаем и сохраняем коннекшены
     table.insert(connections, titleBar.InputBegan:Connect(onInputBegan))
     table.insert(connections, titleBar.InputChanged:Connect(onInputChanged))
     table.insert(connections, UserInputService.InputChanged:Connect(onInputService))
 
-    -- Возвращаем функцию очистки
     return function()
         for _, conn in ipairs(connections) do
             conn:Disconnect()
@@ -418,7 +414,7 @@ end
 
 -- ===== SERVER INFO =====
 local function createServerInfoWindow()
-    -- (без изменений, код тот же, что и в предыдущем сообщении)
+    print("[ServerInfo] Opened")
     local overlay = Instance.new("Frame")
     overlay.Name = "ServerInfoOverlay"
     overlay.Size = UDim2.new(1, 0, 1, 0)
@@ -575,7 +571,6 @@ local function createServerInfoWindow()
         task.delay(1.5, function() if copyBtn and copyBtn.Parent then copyBtn.Text = "Copy to Clipboard" end end)
     end)
 
-    -- Анимация появления
     window.Position = UDim2.new(0.5, -200, 0.5, -280)
     window.BackgroundTransparency = 1
     TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -200, 0.5, -250), BackgroundTransparency = 0 }):Play()
@@ -583,7 +578,7 @@ end
 
 -- ===== ПРОФИЛЬ ИГРОКА =====
 local function createProfileWindow(targetPlayer)
-    -- (без изменений)
+    print("[Profile] Opened for " .. targetPlayer.Name)
     local overlay = Instance.new("Frame")
     overlay.Name = "ProfileOverlay"
     overlay.Size = UDim2.new(1, 0, 1, 0)
@@ -715,7 +710,6 @@ local function createProfileWindow(targetPlayer)
     yOffset = yOffset + 40
     scroll.CanvasSize = UDim2.new(0, 0, 0, yOffset)
 
-    -- Анимация появления
     window.Position = UDim2.new(0.5, -150, 0.5, -200)
     window.BackgroundTransparency = 1
     TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -150, 0.5, -175), BackgroundTransparency = 0 }):Play()
@@ -723,8 +717,8 @@ end
 
 -- ===== SPECTATE (управляемая камера) =====
 local function toggleSpectate(player)
-    -- (без изменений)
     if activeSpectatePlayer == player then
+        print("[Spectate] Stopped watching " .. player.Name)
         if spectateConnection then spectateConnection:Disconnect() spectateConnection = nil end
         if spectateInputConnection then spectateInputConnection:Disconnect() spectateInputConnection = nil end
         if spectateWheelConnection then spectateWheelConnection:Disconnect() spectateWheelConnection = nil end
@@ -732,6 +726,7 @@ local function toggleSpectate(player)
         pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
         return false
     else
+        print("[Spectate] Watching " .. player.Name)
         if spectateConnection then spectateConnection:Disconnect() end
         if spectateInputConnection then spectateInputConnection:Disconnect() end
         if spectateWheelConnection then spectateWheelConnection:Disconnect() end
@@ -781,40 +776,18 @@ local function toggleSpectate(player)
     end
 end
 
--- ===== FREEZE =====
-local function toggleFreeze(player)
-    local char = player.Character
-    if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = hum and hum.RootPart
-    if not hum or not root then return false end
-
-    if frozenPlayers[player] then
-        local saved = frozenPlayers[player]
-        hum.WalkSpeed = saved.walkspeed
-        hum.JumpPower = saved.jumppower
-        root.Anchored = saved.anchored
-        frozenPlayers[player] = nil
-        return false
-    else
-        frozenPlayers[player] = { walkspeed = hum.WalkSpeed, jumppower = hum.JumpPower, anchored = root.Anchored }
-        hum.WalkSpeed = 0
-        hum.JumpPower = 0
-        root.Anchored = true
-        return true
-    end
-end
-
 -- ===== MARK =====
 local function toggleMark(player)
     local char = player.Character
     if not char then return false end
 
     if markedPlayers[player] then
+        print("[Mark] Unmarked " .. player.Name)
         markedPlayers[player]:Destroy()
         markedPlayers[player] = nil
         return false
     else
+        print("[Mark] Marked " .. player.Name)
         local highlight = Instance.new("Highlight")
         highlight.FillColor = COLORS.MarkColor
         highlight.OutlineColor = COLORS.MarkColor
@@ -827,134 +800,93 @@ local function toggleMark(player)
     end
 end
 
--- ===== KICK SYSTEM =====
-local function startKickSession(player)
-    if kickSessions[player] then return end
-    local objects = {}
-    local threads = {}
-    local running = true
+-- ===== ANTI-AFK =====
+local function startAntiAFK()
+    if antiAfkRunning then return end
+    antiAfkRunning = true
+    print("[AntiAFK] Enabled")
 
-    local explosionThread = task.spawn(function()
-        while running do
-            pcall(function()
-                local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    local pos = char.HumanoidRootPart.Position
-                    local explosion = Instance.new("Explosion")
-                    explosion.Position = pos
-                    explosion.BlastRadius = 1
-                    explosion.Parent = workspace
-                    table.insert(objects, explosion)
+    if getconnections then
+        pcall(function()
+            for _, connection in pairs(getconnections(LocalPlayer.Idled)) do
+                if connection.Disable then
+                    connection:Disable()
+                elseif connection.Disconnect then
+                    connection:Disconnect()
                 end
-            end)
-            task.wait(0.1)
+            end
+        end)
+    end
+
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(math.random(0,500), math.random(0,500)))
+        end)
+    end)
+
+    local function CameraMove()
+        pcall(function()
+            local Camera = workspace.CurrentCamera
+            local old = Camera.CFrame
+            local angle = math.rad(math.random(-20,20))
+            Camera.CFrame = old * CFrame.Angles(0, angle, 0)
+        end)
+    end
+
+    local function SmallClick()
+        pcall(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(Vector2.new(math.random(100,700), math.random(100,500)))
+        end)
+    end
+
+    local function MicroMove()
+        pcall(function()
+            local VirtualInputManager = game:GetService("VirtualInputManager")
+            local keys = { Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D }
+            local key = keys[math.random(1, #keys)]
+            VirtualInputManager:SendKeyEvent(true, key, false, game)
+            task.wait(math.random(20,50)/100)
+            VirtualInputManager:SendKeyEvent(false, key, false, game)
+        end)
+    end
+
+    antiAfkLoopThread = task.spawn(function()
+        while antiAfkRunning do
+            local delay = math.random(600, 1500)
+            local elapsed = 0
+            while antiAfkRunning and elapsed < delay do
+                task.wait(1)
+                elapsed = elapsed + 1
+            end
+            if not antiAfkRunning then break end
+
+            local action = math.random(1,100)
+            if action <= 50 then
+                CameraMove()
+            elseif action <= 80 then
+                SmallClick()
+            else
+                MicroMove()
+            end
         end
     end)
-    table.insert(threads, explosionThread)
-
-    local partThread = task.spawn(function()
-        while running do
-            pcall(function()
-                local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    local center = char.HumanoidRootPart.Position
-                    for _ = 1, 5 do
-                        local part = Instance.new("Part")
-                        part.Size = Vector3.new(0.2, 0.2, 0.2)
-                        part.Transparency = 1
-                        part.CanCollide = false
-                        part.Anchored = true
-                        part.Position = center + Vector3.new(
-                            math.random(-10, 10),
-                            math.random(-5, 5),
-                            math.random(-10, 10)
-                        )
-                        part.Parent = workspace
-                        table.insert(objects, part)
-                    end
-                end
-            end)
-            task.wait(0.05)
-        end
-    end)
-    table.insert(threads, partThread)
-
-    local propThread = task.spawn(function()
-        while running do
-            pcall(function()
-                local char = player.Character
-                if char then
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.Transparency = math.random()
-                        end
-                    end
-                end
-            end)
-            task.wait(0.03)
-        end
-    end)
-    table.insert(threads, propThread)
-
-    local soundThread = task.spawn(function()
-        while running do
-            pcall(function()
-                local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") then
-                    local sound = Instance.new("Sound")
-                    sound.SoundId = "rbxassetid://0"
-                    sound.Volume = 10
-                    sound.Parent = char.HumanoidRootPart
-                    sound:Play()
-                    table.insert(objects, sound)
-                    task.delay(0.5, function() pcall(function() sound:Destroy() end) end)
-                end
-            end)
-            task.wait(0.2)
-        end
-    end)
-    table.insert(threads, soundThread)
-
-    local animThread = task.spawn(function()
-        while running do
-            pcall(function()
-                local char = player.Character
-                if char then
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 5)
-                        if animator then
-                            local animTrack = animator:LoadAnimation(Instance.new("Animation"))
-                            if animTrack then
-                                animTrack:Play(0.1, 1, 1)
-                                animTrack:AdjustSpeed(100)
-                                task.delay(0.2, function() pcall(function() animTrack:Stop() end) end)
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.3)
-        end
-    end)
-    table.insert(threads, animThread)
-
-    kickSessions[player] = { threads = threads, objects = objects, running = running }
 end
 
-local function stopKickSession(player)
-    local session = kickSessions[player]
-    if not session then return end
-    session.running = false
-    for _, obj in ipairs(session.objects) do
-        pcall(function() obj:Destroy() end)
+local function stopAntiAFK()
+    antiAfkRunning = false
+    print("[AntiAFK] Disabled")
+    if antiAfkLoopThread then
+        task.cancel(antiAfkLoopThread)
+        antiAfkLoopThread = nil
     end
-    kickSessions[player] = nil
 end
 
 -- ===== ВКЛАДКА PLAYERS =====
 local function createPlayersContent()
-    -- (без изменений)
     local container = Instance.new("Frame")
     container.Name = "PlayersContainer"
     container.Size = UDim2.new(1, 0, 1, 0)
@@ -1022,13 +954,10 @@ local function createPlayersContent()
 
     local function updateCardData(data)
         local player = data.player
-        local card = data.frame
         local healthFill = data.healthFill
         local distanceLabel = data.distanceLabel
-        local freezeBtn = data.freezeBtn
         local spectateBtn = data.spectateBtn
         local markBtn = data.markBtn
-        local kickBtn = data.kickBtn
 
         local char = player.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -1047,14 +976,6 @@ local function createPlayersContent()
             distanceLabel.Text = "?"
         end
 
-        if frozenPlayers[player] then
-            card.BorderColor3 = COLORS.FreezeColor
-            freezeBtn.Text = "Unfreeze"
-        else
-            card.BorderColor3 = COLORS.Border
-            freezeBtn.Text = "Freeze"
-        end
-
         if activeSpectatePlayer == player then
             spectateBtn.Text = "Stop Spectate"
         else
@@ -1066,15 +987,10 @@ local function createPlayersContent()
         else
             markBtn.Text = "Mark"
         end
-
-        if kickSessions[player] then
-            kickBtn.Text = "Stop Kick"
-        else
-            kickBtn.Text = "Start Kick"
-        end
     end
 
     local function createPlayerCard(player)
+        print("[Players] Card created for " .. player.Name)
         local card = Instance.new("Frame")
         card.Name = "PlayerCard_" .. player.UserId
         card.Size = UDim2.new(1, 0, 0, 60)
@@ -1158,8 +1074,9 @@ local function createPlayersContent()
         expandBtn.AutoButtonColor = false
         expandBtn.Parent = infoFrame
 
+        -- actionsFrame (высота уменьшена, только 4 кнопки в 2 ряда)
         local actionsFrame = Instance.new("Frame")
-        actionsFrame.Size = UDim2.new(1, 0, 0, 120)
+        actionsFrame.Size = UDim2.new(1, 0, 0, 80)
         actionsFrame.Position = UDim2.new(0, 0, 0, 60)
         actionsFrame.BackgroundColor3 = COLORS.ButtonHover
         actionsFrame.BorderSizePixel = 0
@@ -1179,10 +1096,14 @@ local function createPlayersContent()
             btn.Font = Enum.Font.Gotham
             btn.AutoButtonColor = false
             btn.Parent = actionsFrame
-            btn.MouseButton1Click:Connect(callback)
+            btn.MouseButton1Click:Connect(function()
+                print("[Action] " .. text .. " on " .. player.Name)
+                callback()
+            end)
             return btn
         end
 
+        -- Первая строка: Teleport To, Spectate, View Profile
         createActionButton("Teleport To", Vector2.new(5, 5), function()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 LocalPlayer.Character:SetPrimaryPartCFrame(player.Character.HumanoidRootPart.CFrame)
@@ -1198,56 +1119,17 @@ local function createPlayersContent()
             createProfileWindow(player)
         end)
 
-        createActionButton("Kill", Vector2.new(5, 40), function()
-            if player.Character then
-                local hum = player.Character:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then hum.Health = 0 end
-            end
-        end)
-
-        createActionButton("Explode", Vector2.new(130, 40), function()
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local pos = player.Character.HumanoidRootPart.Position
-                local explosion = Instance.new("Explosion")
-                explosion.Position = pos
-                explosion.BlastRadius = 5
-                explosion.Parent = workspace
-            end
-        end)
-
-        local freezeBtn = createActionButton("Freeze", Vector2.new(255, 40), function()
-            local frozen = toggleFreeze(player)
-            freezeBtn.Text = frozen and "Unfreeze" or "Freeze"
-            card.BorderColor3 = frozen and COLORS.FreezeColor or COLORS.Border
-        end)
-
-        local markBtn = createActionButton("Mark", Vector2.new(5, 75), function()
+        -- Вторая строка: Mark
+        local markBtn = createActionButton("Mark", Vector2.new(5, 40), function()
             local marked = toggleMark(player)
             markBtn.Text = marked and "Unmark" or "Mark"
         end)
 
-        createActionButton("Teleport to me", Vector2.new(130, 75), function()
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local targetRoot = player.Character.HumanoidRootPart
-                local myRoot = LocalPlayer.Character.HumanoidRootPart
-                targetRoot.CFrame = myRoot.CFrame * CFrame.new(0, 0, -3)
-            end
-        end)
-
-        local kickBtn = createActionButton("Start Kick", Vector2.new(255, 75), function()
-            if kickSessions[player] then
-                stopKickSession(player)
-                kickBtn.Text = "Start Kick"
-            else
-                startKickSession(player)
-                kickBtn.Text = "Stop Kick"
-            end
-        end)
-
+        -- Раскрытие/скрытие
         local isOpen = false
         expandBtn.MouseButton1Click:Connect(function()
             isOpen = not isOpen
-            local targetHeight = isOpen and 180 or 60
+            local targetHeight = isOpen and 140 or 60
             actionsFrame.Visible = isOpen
             local tween = TweenService:Create(card, TWEEN_HOVER, {Size = UDim2.new(1, 0, 0, targetHeight)})
             tween:Play()
@@ -1263,10 +1145,8 @@ local function createPlayersContent()
             frame = card,
             healthFill = healthFill,
             distanceLabel = distanceLabel,
-            freezeBtn = freezeBtn,
             spectateBtn = spectateBtn,
             markBtn = markBtn,
-            kickBtn = kickBtn,
             expandBtn = expandBtn,
             actionsFrame = actionsFrame
         }
@@ -1308,9 +1188,7 @@ local function createPlayersContent()
     end)
     Players.PlayerRemoving:Connect(function(player)
         if activeSpectatePlayer == player then toggleSpectate(player) end
-        if frozenPlayers[player] then toggleFreeze(player) end
         if markedPlayers[player] then toggleMark(player) end
-        if kickSessions[player] then stopKickSession(player) end
         if playerCards[player] then
             playerCards[player].frame:Destroy()
             playerCards[player] = nil
@@ -1337,7 +1215,6 @@ end
 
 -- ===== GENERAL =====
 local function createGeneralContent()
-    -- (без изменений)
     local content = Instance.new("ScrollingFrame")
     content.Name = "Content_General"
     content.Size = UDim2.new(1, 0, 1, 0)
@@ -1413,94 +1290,6 @@ local function createGeneralContent()
 end
 
 -- ===== MISC (Anti-AFK) =====
-local function startAntiAFK()
-    if antiAfkRunning then return end
-    antiAfkRunning = true
-
-    -- Перехват Idled
-    if getconnections then
-        pcall(function()
-            for _, connection in pairs(getconnections(LocalPlayer.Idled)) do
-                if connection.Disable then
-                    connection:Disable()
-                elseif connection.Disconnect then
-                    connection:Disconnect()
-                end
-                table.insert(antiAfkIdledConnections, connection) -- сохраняем, если понадобится
-            end
-        end)
-    end
-
-    -- Дополнительный анти idle
-    LocalPlayer.Idled:Connect(function()
-        pcall(function()
-            local VirtualUser = game:GetService("VirtualUser")
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new(math.random(0,500), math.random(0,500)))
-        end)
-    end)
-
-    -- Функции активности
-    local function CameraMove()
-        pcall(function()
-            local Camera = workspace.CurrentCamera
-            local old = Camera.CFrame
-            local angle = math.rad(math.random(-20,20))
-            Camera.CFrame = old * CFrame.Angles(0, angle, 0)
-        end)
-    end
-
-    local function SmallClick()
-        pcall(function()
-            local VirtualUser = game:GetService("VirtualUser")
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(Vector2.new(math.random(100,700), math.random(100,500)))
-        end)
-    end
-
-    local function MicroMove()
-        pcall(function()
-            local VirtualInputManager = game:GetService("VirtualInputManager")
-            local keys = { Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D }
-            local key = keys[math.random(1, #keys)]
-            VirtualInputManager:SendKeyEvent(true, key, false, game)
-            task.wait(math.random(20,50)/100)
-            VirtualInputManager:SendKeyEvent(false, key, false, game)
-        end)
-    end
-
-    -- Цикл с проверкой флага
-    antiAfkLoopThread = task.spawn(function()
-        while antiAfkRunning do
-            local delay = math.random(600, 1500) -- 10-25 минут в секундах
-            local elapsed = 0
-            while antiAfkRunning and elapsed < delay do
-                task.wait(1)
-                elapsed = elapsed + 1
-            end
-            if not antiAfkRunning then break end
-
-            local action = math.random(1,100)
-            if action <= 50 then
-                CameraMove()
-            elseif action <= 80 then
-                SmallClick()
-            else
-                MicroMove()
-            end
-        end
-    end)
-end
-
-local function stopAntiAFK()
-    antiAfkRunning = false
-    if antiAfkLoopThread then
-        task.cancel(antiAfkLoopThread) -- на случай если поток спит, но он может быть не отменён, поэтому флаг надёжнее
-        antiAfkLoopThread = nil
-    end
-    -- Восстановление Idled не делаем, т.к. это сложно и не критично
-end
-
 local function createMiscContent()
     local content = Instance.new("ScrollingFrame")
     content.Name = "Content_Misc"
@@ -1642,11 +1431,10 @@ end
 local function destroyScript()
     if isClosing then return end
     isClosing = true
+    print("[Unicaliorn] Destroying...")
 
     if activeSpectatePlayer then toggleSpectate(activeSpectatePlayer) end
-    for player, _ in pairs(frozenPlayers) do toggleFreeze(player) end
     for player, _ in pairs(markedPlayers) do toggleMark(player) end
-    for player, _ in pairs(kickSessions) do stopKickSession(player) end
     if antiAfkRunning then stopAntiAFK() end
 
     local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
@@ -1668,6 +1456,7 @@ local function destroyScript()
     end
     ScreenGui:Destroy()
     _G.UnicaliornLoaded = nil
+    print("[Unicaliorn] Destroyed.")
 end
 
 local function toggleMinimize()
@@ -1729,3 +1518,4 @@ local function animateAppearance()
 end
 
 animateAppearance()
+print("[Unicaliorn] Loaded successfully!")
