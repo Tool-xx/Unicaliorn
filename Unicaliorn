@@ -56,9 +56,13 @@ local spectateYaw = 0
 local spectatePitch = -math.rad(15)
 local markedPlayers = {}
 
--- Anti-AFK переменные
 local antiAfkRunning = false
 local antiAfkLoopThread = nil
+
+local fpsWindow = nil
+local fpsConnection = nil
+local pingWindow = nil
+local pingConnection = nil
 
 -- ===== UI СОЗДАНИЕ =====
 
@@ -368,7 +372,7 @@ local function createButton(parent, name, yPos, callback)
 end
 
 -- ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ DRAG-ОКОН =====
-local function setupWindowDrag(window, titleBar)
+local function setupWindowDrag(window, dragElement)
     local connections = {}
     local dragging, dragInput, dragStart, startPos
 
@@ -401,8 +405,8 @@ local function setupWindowDrag(window, titleBar)
         end
     end
 
-    table.insert(connections, titleBar.InputBegan:Connect(onInputBegan))
-    table.insert(connections, titleBar.InputChanged:Connect(onInputChanged))
+    table.insert(connections, dragElement.InputBegan:Connect(onInputBegan))
+    table.insert(connections, dragElement.InputChanged:Connect(onInputChanged))
     table.insert(connections, UserInputService.InputChanged:Connect(onInputService))
 
     return function()
@@ -885,6 +889,138 @@ local function stopAntiAFK()
     end
 end
 
+-- ===== FPS & PING WINDOWS =====
+local function createFPSWindow()
+    if fpsWindow then return end
+    print("[FPS] Window created")
+    local window = Instance.new("Frame")
+    window.Name = "FPSWindow"
+    window.Size = UDim2.new(0, 80, 0, 30)
+    window.Position = UDim2.new(1, -90, 0, 10)
+    window.BackgroundColor3 = COLORS.Background
+    window.BackgroundTransparency = 0.5
+    window.BorderSizePixel = 1
+    window.BorderColor3 = COLORS.Border
+    window.Parent = ScreenGui
+
+    local label = Instance.new("TextLabel")
+    label.Name = "FPSLabel"
+    label.Size = UDim2.new(1, -25, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "60 FPS"
+    label.TextColor3 = COLORS.Text
+    label.TextSize = 14
+    label.Font = Enum.Font.GothamBold
+    label.Parent = window
+
+    local dragIcon = Instance.new("TextButton")
+    dragIcon.Name = "DragButton"
+    dragIcon.Size = UDim2.new(0, 20, 1, 0)
+    dragIcon.Position = UDim2.new(1, -20, 0, 0)
+    dragIcon.BackgroundColor3 = COLORS.Border
+    dragIcon.BackgroundTransparency = 0.5
+    dragIcon.BorderSizePixel = 0
+    dragIcon.Text = "⬙"
+    dragIcon.TextColor3 = COLORS.Text
+    dragIcon.TextSize = 14
+    dragIcon.AutoButtonColor = false
+    dragIcon.Parent = window
+
+    local cleanupDrag = setupWindowDrag(window, dragIcon)
+
+    local lastTime = os.clock()
+    local frames = 0
+    local currentFPS = 60
+
+    fpsConnection = RunService.Heartbeat:Connect(function()
+        frames = frames + 1
+        local now = os.clock()
+        if now - lastTime >= 0.2 then
+            currentFPS = math.floor(frames / (now - lastTime) + 0.5)
+            frames = 0
+            lastTime = now
+        end
+        label.Text = currentFPS .. " FPS"
+    end)
+
+    window.Destroying:Connect(function()
+        cleanupDrag()
+        if fpsConnection then fpsConnection:Disconnect() fpsConnection = nil end
+    end)
+
+    fpsWindow = window
+end
+
+local function destroyFPSWindow()
+    if fpsWindow then
+        fpsWindow:Destroy()
+        fpsWindow = nil
+        print("[FPS] Window destroyed")
+    end
+end
+
+local function createPingWindow()
+    if pingWindow then return end
+    print("[Ping] Window created")
+    local window = Instance.new("Frame")
+    window.Name = "PingWindow"
+    local yPos = 10
+    if fpsWindow then yPos = 50 end
+    window.Size = UDim2.new(0, 100, 0, 30)
+    window.Position = UDim2.new(1, -110, 0, yPos)
+    window.BackgroundColor3 = COLORS.Background
+    window.BackgroundTransparency = 0.5
+    window.BorderSizePixel = 1
+    window.BorderColor3 = COLORS.Border
+    window.Parent = ScreenGui
+
+    local label = Instance.new("TextLabel")
+    label.Name = "PingLabel"
+    label.Size = UDim2.new(1, -25, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "0 ms"
+    label.TextColor3 = COLORS.Text
+    label.TextSize = 14
+    label.Font = Enum.Font.GothamBold
+    label.Parent = window
+
+    local dragIcon = Instance.new("TextButton")
+    dragIcon.Name = "DragButton"
+    dragIcon.Size = UDim2.new(0, 20, 1, 0)
+    dragIcon.Position = UDim2.new(1, -20, 0, 0)
+    dragIcon.BackgroundColor3 = COLORS.Border
+    dragIcon.BackgroundTransparency = 0.5
+    dragIcon.BorderSizePixel = 0
+    dragIcon.Text = "⬙"
+    dragIcon.TextColor3 = COLORS.Text
+    dragIcon.TextSize = 14
+    dragIcon.AutoButtonColor = false
+    dragIcon.Parent = window
+
+    local cleanupDrag = setupWindowDrag(window, dragIcon)
+
+    pingConnection = RunService.RenderStepped:Connect(function()
+        label.Text = math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
+    end)
+
+    window.Destroying:Connect(function()
+        cleanupDrag()
+        if pingConnection then pingConnection:Disconnect() pingConnection = nil end
+    end)
+
+    pingWindow = window
+end
+
+local function destroyPingWindow()
+    if pingWindow then
+        pingWindow:Destroy()
+        pingWindow = nil
+        print("[Ping] Window destroyed")
+    end
+end
+
 -- ===== ВКЛАДКА PLAYERS =====
 local function createPlayersContent()
     local container = Instance.new("Frame")
@@ -1074,7 +1210,7 @@ local function createPlayersContent()
         expandBtn.AutoButtonColor = false
         expandBtn.Parent = infoFrame
 
-        -- actionsFrame (высота уменьшена, только 4 кнопки в 2 ряда)
+        -- actionsFrame (4 кнопки: Teleport To, Spectate, View Profile, Mark)
         local actionsFrame = Instance.new("Frame")
         actionsFrame.Size = UDim2.new(1, 0, 0, 80)
         actionsFrame.Position = UDim2.new(0, 0, 0, 60)
@@ -1103,7 +1239,6 @@ local function createPlayersContent()
             return btn
         end
 
-        -- Первая строка: Teleport To, Spectate, View Profile
         createActionButton("Teleport To", Vector2.new(5, 5), function()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                 LocalPlayer.Character:SetPrimaryPartCFrame(player.Character.HumanoidRootPart.CFrame)
@@ -1119,13 +1254,11 @@ local function createPlayersContent()
             createProfileWindow(player)
         end)
 
-        -- Вторая строка: Mark
         local markBtn = createActionButton("Mark", Vector2.new(5, 40), function()
             local marked = toggleMark(player)
             markBtn.Text = marked and "Unmark" or "Mark"
         end)
 
-        -- Раскрытие/скрытие
         local isOpen = false
         expandBtn.MouseButton1Click:Connect(function()
             isOpen = not isOpen
@@ -1289,7 +1422,7 @@ local function createGeneralContent()
     return content
 end
 
--- ===== MISC (Anti-AFK) =====
+-- ===== MISC =====
 local function createMiscContent()
     local content = Instance.new("ScrollingFrame")
     content.Name = "Content_Misc"
@@ -1303,11 +1436,15 @@ local function createMiscContent()
     content.Parent = ContentFrame
 
     createToggle(content, "Anti-AFK", 10, function(enabled)
-        if enabled then
-            startAntiAFK()
-        else
-            stopAntiAFK()
-        end
+        if enabled then startAntiAFK() else stopAntiAFK() end
+    end)
+
+    createToggle(content, "FPS Counter", 50, function(enabled)
+        if enabled then createFPSWindow() else destroyFPSWindow() end
+    end)
+
+    createToggle(content, "Ping Counter", 90, function(enabled)
+        if enabled then createPingWindow() else destroyPingWindow() end
     end)
 
     return content
@@ -1436,6 +1573,8 @@ local function destroyScript()
     if activeSpectatePlayer then toggleSpectate(activeSpectatePlayer) end
     for player, _ in pairs(markedPlayers) do toggleMark(player) end
     if antiAfkRunning then stopAntiAFK() end
+    destroyFPSWindow()
+    destroyPingWindow()
 
     local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
     TweenService:Create(TitleBar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
