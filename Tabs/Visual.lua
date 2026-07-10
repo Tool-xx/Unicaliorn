@@ -1,5 +1,5 @@
 -- Tabs/Visual.lua
--- Visual tab: ESP toggle + simple toggles for Box, Hitbox, Skeleton
+-- Visual tab: ESP toggle + simple toggles for Box, Hitbox
 -- All ESP uses dynamic neon green gradient (no color selection)
 -- Receives Context, returns tab content frame
 
@@ -21,7 +21,7 @@ return function(Context)
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 280)
+    content.CanvasSize = UDim2.new(0, 0, 0, 220)
     content.Visible = false
     content.Parent = Context.UI.ContentFrame
 
@@ -106,20 +106,11 @@ return function(Context)
         espToggleKnob.Position = UDim2.new(1, -20, 0.5, -9)
     end
 
-    -- Separator between header and settings
-    local headerSep = Instance.new("Frame")
-    headerSep.Name = "HeaderSeparator"
-    headerSep.Size = UDim2.new(1, -20, 0, 1)
-    headerSep.Position = UDim2.new(0, 10, 0, 42)
-    headerSep.BackgroundColor3 = COLORS.Border
-    headerSep.BorderSizePixel = 0
-    headerSep.Parent = content
-
     -- Settings Frame (collapsible)
     local settingsFrame = Instance.new("Frame")
     settingsFrame.Name = "ESP_Settings"
     settingsFrame.Size = UDim2.new(1, -20, 0, 0)
-    settingsFrame.Position = UDim2.new(0, 10, 0, 48)
+    settingsFrame.Position = UDim2.new(0, 10, 0, 45)
     settingsFrame.BackgroundColor3 = COLORS.Background
     settingsFrame.BorderSizePixel = 1
     settingsFrame.BorderColor3 = COLORS.Border
@@ -128,7 +119,7 @@ return function(Context)
     settingsFrame.Parent = content
 
     local settingsOpen = false
-    local targetHeight = 150
+    local targetHeight = 110
 
     settingsToggleBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
@@ -142,7 +133,7 @@ return function(Context)
     end)
 
     -- ============================================================
-    -- ESP SUB-TOGGLES (Box, Hitbox, Skeleton) - NO GEAR ICONS
+    -- ESP SUB-TOGGLES (Box, Hitbox) - NO GEAR ICONS
     -- ============================================================
     local yOffset = 10
 
@@ -176,21 +167,6 @@ return function(Context)
     end
     yOffset = yOffset + 40
 
-    -- Skeleton Toggle
-    local skeletonToggle = Components.createToggle(settingsFrame, "Skeleton", yOffset, function(enabled)
-        if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableSkeleton()
-            else
-                Context.Features.ESP.DisableSkeleton()
-            end
-        end
-    end)
-    if FeatureState.espSkeletonEnabled then
-        skeletonToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
-
     targetHeight = yOffset + 10
     settingsFrame.Size = UDim2.new(1, -20, 0, 0)
 
@@ -199,7 +175,7 @@ return function(Context)
     -- ============================================================
     local gradientLabel = Instance.new("TextLabel")
     gradientLabel.Size = UDim2.new(1, -20, 0, 20)
-    gradientLabel.Position = UDim2.new(0, 10, 0, 215)
+    gradientLabel.Position = UDim2.new(0, 10, 0, 170)
     gradientLabel.BackgroundTransparency = 1
     gradientLabel.Text = "ESP uses dynamic neon green glow"
     gradientLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
