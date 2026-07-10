@@ -100,7 +100,6 @@ return {
         espEnabled = false,
         espBoxEnabled = true,
         espHitboxEnabled = false,
-        espSkeletonEnabled = false,
         espHighlights = {},
         espPlayerAddedConn = nil,
         espCharacterAddedConns = {},
