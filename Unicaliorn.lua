@@ -57,8 +57,9 @@ if not Context then
     return
 end
 
--- Inject Config and script start time into Context
+-- Inject Config, BASE_URL and script start time into Context
 Context.Config = Config
+Context.BASE_URL = BASE_URL
 Context.SCRIPT_START_TIME = SCRIPT_START_TIME
 
 -- ============================================================
@@ -92,7 +93,22 @@ else
 end
 
 -- ============================================================
--- STEP 5: Load Utils (shared helpers)
+-- STEP 5: Load Notification (show injection popup)
+-- ============================================================
+local Notification = loadModule("UI/Notification.lua")
+if Notification then
+    local notifModule = Notification(Context)
+    if notifModule and notifModule.Show then
+        task.defer(function()
+            notifModule.Show()
+        end)
+    end
+else
+    warn("[Unicaliorn] WARNING: UI/Notification.lua failed to load.")
+end
+
+-- ============================================================
+-- STEP 6: Load Utils (shared helpers)
 -- ============================================================
 Context.Utils = loadModule("Utils/Helpers.lua")
 if Context.Utils then
@@ -102,7 +118,7 @@ else
 end
 
 -- ============================================================
--- STEP 6: Load Features (ESP, Fly, Noclip, etc.)
+-- STEP 7: Load Features (ESP, Fly, Noclip, etc.)
 -- ============================================================
 Context.Features = {}
 
@@ -134,7 +150,7 @@ for _, name in ipairs(featureFiles) do
 end
 
 -- ============================================================
--- STEP 7: Load Windows (ServerInfo, PlayerProfile)
+-- STEP 8: Load Windows (ServerInfo, PlayerProfile)
 -- ============================================================
 Context.Windows = {}
 
@@ -159,7 +175,7 @@ for _, name in ipairs(windowFiles) do
 end
 
 -- ============================================================
--- STEP 8: Load Tabs (General, Players, Misc, Movement, Visual)
+-- STEP 9: Load Tabs (General, Players, Misc, Movement, Visual)
 -- ============================================================
 local Tabs = {}
 
@@ -187,7 +203,7 @@ for _, name in ipairs(tabFiles) do
 end
 
 -- ============================================================
--- STEP 9: Wire up Tab Switching & Activate First Tab
+-- STEP 10: Wire up Tab Switching & Activate First Tab
 -- ============================================================
 if Context.UI.Main and Context.UI.Main.setActiveTab then
     -- Wire sidebar buttons to tab switching
@@ -206,7 +222,7 @@ if Context.UI.Main and Context.UI.Main.setActiveTab then
 end
 
 -- ============================================================
--- STEP 10: Animate Appearance
+-- STEP 11: Animate Appearance
 -- ============================================================
 if Context.UI.Main and Context.UI.Main.animateAppearance then
     Context.UI.Main.animateAppearance()
