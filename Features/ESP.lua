@@ -55,6 +55,51 @@ return function(Context)
         return FeatureState.espHitboxEnabled
     end
 
-    print("[Feature] ESP module loaded (dynamic gradient).")
+    -- ============================================================
+    -- HEALTH BAR
+    -- ============================================================
+    function ESP.EnableHealth()
+        Utils.setHealthEnabled(true)
+    end
+
+    function ESP.DisableHealth()
+        Utils.setHealthEnabled(false)
+    end
+
+    function ESP.IsHealthEnabled()
+        return FeatureState.espHealthEnabled
+    end
+
+    -- ============================================================
+    -- NAME
+    -- ============================================================
+    function ESP.EnableName()
+        Utils.setNameEnabled(true)
+    end
+
+    function ESP.DisableName()
+        Utils.setNameEnabled(false)
+    end
+
+    function ESP.IsNameEnabled()
+        return FeatureState.espNameEnabled
+    end
+
+    -- ============================================================
+    -- DISTANCE
+    -- ============================================================
+    function ESP.EnableDistance()
+        Utils.setDistanceEnabled(true)
+    end
+
+    function ESP.DisableDistance()
+        Utils.setDistanceEnabled(false)
+    end
+
+    function ESP.IsDistanceEnabled()
+        return FeatureState.espDistanceEnabled
+    end
+
+    print("[Feature] ESP module loaded (full suite with gradient).")
     return ESP
 end
