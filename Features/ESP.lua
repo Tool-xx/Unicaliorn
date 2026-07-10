@@ -1,7 +1,7 @@
 -- Features/ESP.lua
 -- ESP Feature module
 -- Wraps Utils ESP functions into a clean Feature API
--- All colors are dynamic black-white gradient (no manual color selection)
+-- All colors are dynamic neon green gradient (no manual color selection)
 -- Receives Context, returns Feature table
 
 return function(Context)
@@ -53,21 +53,6 @@ return function(Context)
 
     function ESP.IsHitboxEnabled()
         return FeatureState.espHitboxEnabled
-    end
-
-    -- ============================================================
-    -- SKELETON
-    -- ============================================================
-    function ESP.EnableSkeleton()
-        Utils.setSkeletonEnabled(true)
-    end
-
-    function ESP.DisableSkeleton()
-        Utils.setSkeletonEnabled(false)
-    end
-
-    function ESP.IsSkeletonEnabled()
-        return FeatureState.espSkeletonEnabled
     end
 
     print("[Feature] ESP module loaded (dynamic gradient).")
