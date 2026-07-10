@@ -30,7 +30,6 @@ return function(Context)
         local speed = Config.ESP.GradientSpeed
         local c1 = Config.ESP.GradientColor1
         local c2 = Config.ESP.GradientColor2
-        -- Smooth sine wave oscillation between c1 and c2
         local t = (math.sin(gradientTime * math.pi * 2 / speed) + 1) / 2
         return lerpColor3(c1, c2, t)
     end
@@ -40,11 +39,9 @@ return function(Context)
         gradientConnection = RunService.Heartbeat:Connect(function(dt)
             gradientTime = gradientTime + dt
             local color = getGradientColor()
-            -- Update all active ESP elements with the gradient color
             for _, data in pairs(FeatureState.espHighlights) do
                 if data.box then
-                    data.box.FillColor = color
-                    data.box.OutlineColor = color
+                    data.box.Color = color
                 end
                 if data.hitbox then
                     data.hitbox.FillColor = color
@@ -66,7 +63,62 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE SKELETON BEAMS
+    -- CREATE BOX (rectangle using 4 LineHandles or Frame approach)
+    -- Using BillboardGui with Frame corners for a clean rectangle
+    -- ============================================================
+    local function createBoxFrame(char, color)
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESPBox"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 100, 0, 200)
+        billboard.StudsOffset = Vector3.new(0, 0, 0)
+        billboard.Adornee = hrp
+        billboard.Parent = char
+
+        -- Top line
+        local top = Instance.new("Frame")
+        top.Name = "Top"
+        top.Size = UDim2.new(1, 0, 0, 2)
+        top.Position = UDim2.new(0, 0, 0, 0)
+        top.BackgroundColor3 = color
+        top.BorderSizePixel = 0
+        top.Parent = billboard
+
+        -- Bottom line
+        local bottom = Instance.new("Frame")
+        bottom.Name = "Bottom"
+        bottom.Size = UDim2.new(1, 0, 0, 2)
+        bottom.Position = UDim2.new(0, 0, 1, -2)
+        bottom.BackgroundColor3 = color
+        bottom.BorderSizePixel = 0
+        bottom.Parent = billboard
+
+        -- Left line
+        local left = Instance.new("Frame")
+        left.Name = "Left"
+        left.Size = UDim2.new(0, 2, 1, 0)
+        left.Position = UDim2.new(0, 0, 0, 0)
+        left.BackgroundColor3 = color
+        left.BorderSizePixel = 0
+        left.Parent = billboard
+
+        -- Right line
+        local right = Instance.new("Frame")
+        right.Name = "Right"
+        right.Size = UDim2.new(0, 2, 1, 0)
+        right.Position = UDim2.new(1, -2, 0, 0)
+        right.BackgroundColor3 = color
+        right.BorderSizePixel = 0
+        right.Parent = billboard
+
+        return billboard
+    end
+
+    -- ============================================================
+    -- CREATE SKELETON BEAMS (thicker and more visible)
     -- ============================================================
     function Utils.createSkeleton(char)
         local currentColor = getGradientColor()
@@ -75,14 +127,22 @@ return function(Context)
             local part0 = char:FindFirstChild(bone[1])
             local part1 = char:FindFirstChild(bone[2])
             if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
-                local attach0 = Instance.new("Attachment", part0)
-                local attach1 = Instance.new("Attachment", part1)
+                local attach0 = Instance.new("Attachment")
+                attach0.Name = "SkelA_" .. bone[1]
+                attach0.Parent = part0
+                local attach1 = Instance.new("Attachment")
+                attach1.Name = "SkelA_" .. bone[2]
+                attach1.Parent = part1
                 local beam = Instance.new("Beam")
+                beam.Name = "SkelBeam_" .. bone[1] .. "_" .. bone[2]
                 beam.Attachment0 = attach0
                 beam.Attachment1 = attach1
                 beam.Color = ColorSequence.new(currentColor)
-                beam.Width0 = 0.05
-                beam.Width1 = 0.05
+                beam.Width0 = 0.15
+                beam.Width1 = 0.15
+                beam.FaceCamera = true
+                beam.LightEmission = 1
+                beam.LightInfluence = 0
                 beam.Parent = char
                 table.insert(beams, beam)
             end
@@ -128,17 +188,12 @@ return function(Context)
         local box, hitbox, skeleton
 
         if FeatureState.espBoxEnabled then
-            box = Instance.new("Highlight")
-            box.Adornee = char
-            box.FillTransparency = 1
-            box.OutlineTransparency = 0
-            box.FillColor = currentColor
-            box.OutlineColor = currentColor
-            box.Parent = char
+            box = createBoxFrame(char, currentColor)
         end
 
         if FeatureState.espHitboxEnabled then
             hitbox = Instance.new("Highlight")
+            hitbox.Name = "ESPHitbox"
             hitbox.Adornee = char
             hitbox.FillTransparency = 0.3
             hitbox.OutlineTransparency = 1
@@ -255,13 +310,13 @@ return function(Context)
     end
 
     -- ============================================================
-    -- INIT (no static colors needed, gradient is dynamic)
+    -- INIT
     -- ============================================================
     function Utils.initESP()
-        -- Gradient colors are computed on-the-fly, no static init needed
+        -- Gradient colors are computed on-the-fly
     end
 
     -- Register in Context
     Context.Utils = Utils
-    print("[Helpers] Utils registered with dynamic gradient ESP.")
+    print("[Helpers] Utils registered with neon green gradient ESP.")
 end
