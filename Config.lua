@@ -64,22 +64,14 @@ return {
     },
 
     -- ============================================================
-    -- ESP DEFAULT COLORS
+    -- ESP GRADIENT SETTINGS (dynamic black-white gradient)
     -- ============================================================
     ESP = {
-        BoxColor        = Color3.fromRGB(255, 255, 255),
-        HitboxColor     = Color3.fromRGB(255, 0, 0),
-        SkeletonColor   = Color3.fromRGB(0, 255, 0),
-    },
-
-    -- ============================================================
-    -- COLOR MENU OPTIONS
-    -- ============================================================
-    COLOR_OPTIONS = {
-        {name = "White", color = Color3.fromRGB(255, 255, 255)},
-        {name = "Red",   color = Color3.fromRGB(255, 0, 0)},
-        {name = "Cyan",  color = Color3.fromRGB(0, 255, 255)},
-        {name = "Black", color = Color3.fromRGB(0, 0, 0)},
+        -- Base colors for the gradient cycle
+        GradientColor1  = Color3.fromRGB(255, 255, 255),  -- White
+        GradientColor2  = Color3.fromRGB(0, 0, 0),        -- Black
+        -- Cycle speed: how fast the gradient shifts (seconds per full cycle)
+        GradientSpeed   = 3,
     },
 
     -- ============================================================
