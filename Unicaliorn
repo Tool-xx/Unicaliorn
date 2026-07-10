@@ -64,6 +64,44 @@ local fpsConnection = nil
 local pingWindow = nil
 local pingConnection = nil
 
+-- Noclip
+local noclipEnabled = false
+local noclipConnection = nil
+
+-- Speedhack
+local speedhackEnabled = false
+local speedhackSpeed = 16
+local speedhackCharConnection = nil
+
+-- Fly
+local flyEnabled = false
+local flySpeed = 50
+local flyCharConnection = nil
+local flyInputBegan = nil
+local flyInputEnded = nil
+local flyLoop = nil
+local flyBodyGyro = nil
+local flyBodyVelocity = nil
+local flyControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
+local flyLastControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
+local flyCurrentSpeed = 0
+
+-- Infinity Jump
+local infinityJumpEnabled = false
+local infinityJumpConnection = nil
+
+-- Visual / ESP
+local espEnabled = false
+local espBoxEnabled = true
+local espBoxColor = Color3.fromRGB(255, 255, 255)
+local espHitboxEnabled = false
+local espHitboxColor = Color3.fromRGB(255, 0, 0)
+local espSkeletonEnabled = false
+local espSkeletonColor = Color3.fromRGB(0, 255, 0)
+local espHighlights = {}
+local espPlayerAddedConn = nil
+local espCharacterAddedConns = {}
+
 -- ===== UI СОЗДАНИЕ =====
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -415,7 +453,6 @@ local function setupWindowDrag(window, dragElement)
         end
     end
 end
-
 -- ===== SERVER INFO =====
 local function createServerInfoWindow()
     print("[ServerInfo] Opened")
@@ -1020,6 +1057,436 @@ local function destroyPingWindow()
         print("[Ping] Window destroyed")
     end
 end
+-- ===== NOCLIP =====
+local function enableNoclip()
+    if noclipEnabled then return end
+    noclipEnabled = true
+    print("[Noclip] Enabled")
+
+    noclipConnection = RunService.Stepped:Connect(function()
+        if noclipEnabled then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide == true then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if not noclipEnabled then return end
+    noclipEnabled = false
+    print("[Noclip] Disabled")
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- ===== SPEEDHACK =====
+local function applySpeed(speed)
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = speed
+        end
+    end
+end
+
+local function enableSpeedhack()
+    if speedhackEnabled then return end
+    speedhackEnabled = true
+    print("[Speedhack] Enabled (" .. speedhackSpeed .. ")")
+    applySpeed(speedhackSpeed)
+    speedhackCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid", 10)
+        if hum and speedhackEnabled then
+            hum.WalkSpeed = speedhackSpeed
+        end
+    end)
+end
+
+local function disableSpeedhack()
+    if not speedhackEnabled then return end
+    speedhackEnabled = false
+    print("[Speedhack] Disabled")
+    if speedhackCharConnection then
+        speedhackCharConnection:Disconnect()
+        speedhackCharConnection = nil
+    end
+    applySpeed(16)
+end
+
+local function setSpeedhackSpeed(value)
+    speedhackSpeed = value
+    if speedhackEnabled then
+        applySpeed(value)
+    end
+end
+
+-- ===== FLY =====
+local function startFly()
+    if flyEnabled then return end
+    flyEnabled = true
+    print("[Fly] Enabled (" .. flySpeed .. ")")
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local root = humanoid.RootPart
+    if not root then return end
+
+    -- Создаём физические объекты
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.P = 9e4
+    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyGyro.Parent = root
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    flyBodyVelocity.Parent = root
+
+    -- Сброс управления
+    flyControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
+    flyLastControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
+    flyCurrentSpeed = 0
+
+    -- Обработчики ввода
+    flyInputBegan = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        local spd = flySpeed
+        if input.KeyCode == Enum.KeyCode.W then flyControl.F = spd
+        elseif input.KeyCode == Enum.KeyCode.S then flyControl.B = -spd
+        elseif input.KeyCode == Enum.KeyCode.A then flyControl.L = -spd
+        elseif input.KeyCode == Enum.KeyCode.D then flyControl.R = spd
+        elseif input.KeyCode == Enum.KeyCode.E then flyControl.Q = spd*2
+        elseif input.KeyCode == Enum.KeyCode.Q then flyControl.E = -spd*2
+        end
+        pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Track end)
+    end)
+
+    flyInputEnded = UserInputService.InputEnded:Connect(function(input, processed)
+        if processed then return end
+        if input.KeyCode == Enum.KeyCode.W then flyControl.F = 0
+        elseif input.KeyCode == Enum.KeyCode.S then flyControl.B = 0
+        elseif input.KeyCode == Enum.KeyCode.A then flyControl.L = 0
+        elseif input.KeyCode == Enum.KeyCode.D then flyControl.R = 0
+        elseif input.KeyCode == Enum.KeyCode.E then flyControl.Q = 0
+        elseif input.KeyCode == Enum.KeyCode.Q then flyControl.E = 0
+        end
+    end)
+
+    -- Цикл полёта
+    flyLoop = RunService.RenderStepped:Connect(function()
+        if not flyEnabled then return end
+        local camera = workspace.CurrentCamera
+        if humanoid and humanoid.Parent then
+            humanoid.PlatformStand = true
+        end
+
+        local spd = flySpeed
+        local isMoving = flyControl.L+flyControl.R ~= 0 or flyControl.F+flyControl.B ~= 0 or flyControl.Q+flyControl.E ~= 0
+
+        if isMoving then
+            flyCurrentSpeed = spd
+        elseif flyCurrentSpeed ~= 0 then
+            flyCurrentSpeed = 0
+        end
+
+        if isMoving then
+            flyBodyVelocity.Velocity = ((camera.CFrame.LookVector * (flyControl.F + flyControl.B)) +
+                ((camera.CFrame * CFrame.new(flyControl.L + flyControl.R,
+                (flyControl.F + flyControl.B + flyControl.Q + flyControl.E) * 0.2, 0).p) - camera.CFrame.p)) * flyCurrentSpeed
+            flyLastControl = {F=flyControl.F, B=flyControl.B, L=flyControl.L, R=flyControl.R}
+        elseif flyCurrentSpeed ~= 0 then
+            flyBodyVelocity.Velocity = ((camera.CFrame.LookVector * (flyLastControl.F + flyLastControl.B)) +
+                ((camera.CFrame * CFrame.new(flyLastControl.L + flyLastControl.R,
+                (flyLastControl.F + flyLastControl.B + flyControl.Q + flyControl.E) * 0.2, 0).p) - camera.CFrame.p)) * flyCurrentSpeed
+        else
+            flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+        flyBodyGyro.CFrame = camera.CFrame
+    end)
+end
+
+local function stopFly()
+    if not flyEnabled then return end
+    flyEnabled = false
+    print("[Fly] Disabled")
+    if flyInputBegan then flyInputBegan:Disconnect() flyInputBegan = nil end
+    if flyInputEnded then flyInputEnded:Disconnect() flyInputEnded = nil end
+    if flyLoop then flyLoop:Disconnect() flyLoop = nil end
+    if flyCharConnection then flyCharConnection:Disconnect() flyCharConnection = nil end
+
+    if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+    if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
+
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+    pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
+end
+
+local function setFlySpeed(value)
+    flySpeed = value
+end
+
+-- Обработчик возрождения для Fly
+flyCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
+    if flyEnabled then
+        stopFly()
+        task.wait(0.2)
+        if not flyEnabled then return end
+        startFly()
+    end
+end)
+
+-- ===== INFINITY JUMP (исправленный) =====
+local function enableInfinityJump()
+    if infinityJumpEnabled then return end
+    infinityJumpEnabled = true
+    print("[InfinityJump] Enabled")
+
+    infinityJumpConnection = UserInputService.JumpRequest:Connect(function()
+        if not infinityJumpEnabled then return end
+
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+
+        local root = hum.RootPart
+        if not root then return end
+
+        -- Добавляем вертикальную скорость, сохраняя горизонтальную
+        local currentVel = root.AssemblyLinearVelocity
+        root.AssemblyLinearVelocity = Vector3.new(
+            currentVel.X,
+            hum.JumpPower,
+            currentVel.Z
+        )
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end)
+end
+
+local function disableInfinityJump()
+    if not infinityJumpEnabled then return end
+    infinityJumpEnabled = false
+    print("[InfinityJump] Disabled")
+    if infinityJumpConnection then
+        infinityJumpConnection:Disconnect()
+        infinityJumpConnection = nil
+    end
+end
+-- ===== VISUAL / ESP =====
+local function createSkeleton(char, color)
+    local bones = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"}
+    }
+    local beams = {}
+    for _, bone in ipairs(bones) do
+        local part0 = char:FindFirstChild(bone[1])
+        local part1 = char:FindFirstChild(bone[2])
+        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
+            local attach0 = Instance.new("Attachment", part0)
+            local attach1 = Instance.new("Attachment", part1)
+            local beam = Instance.new("Beam")
+            beam.Attachment0 = attach0
+            beam.Attachment1 = attach1
+            beam.Color = ColorSequence.new(color)
+            beam.Width0 = 0.05
+            beam.Width1 = 0.05
+            beam.Parent = char
+            table.insert(beams, beam)
+        end
+    end
+    return beams
+end
+
+local function destroySkeleton(beams)
+    for _, beam in ipairs(beams) do
+        if beam then
+            if beam.Attachment0 then beam.Attachment0:Destroy() end
+            if beam.Attachment1 then beam.Attachment1:Destroy() end
+            beam:Destroy()
+        end
+    end
+end
+
+local function removeESP(player)
+    local data = espHighlights[player]
+    if not data then return end
+    if data.box then data.box:Destroy() end
+    if data.hitbox then data.hitbox:Destroy() end
+    if data.skeleton then destroySkeleton(data.skeleton) end
+    espHighlights[player] = nil
+end
+
+local function createESP(player)
+    removeESP(player)
+    if not espEnabled then return end
+    local char = player.Character
+    if not char then return end
+    local box, hitbox, skeleton
+    if espBoxEnabled then
+        box = Instance.new("Highlight")
+        box.Adornee = char
+        box.FillTransparency = 1
+        box.OutlineTransparency = 0
+        box.FillColor = espBoxColor
+        box.OutlineColor = espBoxColor
+        box.Parent = char
+    end
+    if espHitboxEnabled then
+        hitbox = Instance.new("Highlight")
+        hitbox.Adornee = char
+        hitbox.FillTransparency = 0.3
+        hitbox.OutlineTransparency = 1
+        hitbox.FillColor = espHitboxColor
+        hitbox.Parent = char
+    end
+    if espSkeletonEnabled then
+        skeleton = createSkeleton(char, espSkeletonColor)
+    end
+    espHighlights[player] = {box=box, hitbox=hitbox, skeleton=skeleton}
+end
+
+local function updateAllBoxColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.box then data.box.FillColor = color; data.box.OutlineColor = color end
+    end
+end
+local function updateAllHitboxColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.hitbox then data.hitbox.FillColor = color end
+    end
+end
+local function updateAllSkeletonColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.skeleton then
+            for _, beam in ipairs(data.skeleton) do
+                beam.Color = ColorSequence.new(color)
+            end
+        end
+    end
+end
+
+local function enableESP()
+    if espEnabled then return end
+    espEnabled = true
+    print("[ESP] Enabled")
+    -- Показать настройки
+    if espSettingsFrame then
+        espSettingsFrame.Visible = true
+        TweenService:Create(espSettingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, 0, 0, 490)}):Play()
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        createESP(player)
+        if not espCharacterAddedConns[player] then
+            espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                if espEnabled then createESP(player) end
+            end)
+        end
+    end
+    if not espPlayerAddedConn then
+        espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
+            if espEnabled then
+                createESP(player)
+                if not espCharacterAddedConns[player] then
+                    espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                        if espEnabled then createESP(player) end
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+local function disableESP()
+    if not espEnabled then return end
+    espEnabled = false
+    print("[ESP] Disabled")
+    if espSettingsFrame then
+        TweenService:Create(espSettingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+        task.delay(0.35, function() espSettingsFrame.Visible = false end)
+    end
+    if espPlayerAddedConn then espPlayerAddedConn:Disconnect() espPlayerAddedConn = nil end
+    for _, conn in pairs(espCharacterAddedConns) do conn:Disconnect() end
+    espCharacterAddedConns = {}
+    for player in pairs(espHighlights) do removeESP(player) end
+end
+
+local function setBoxEnabled(enabled)
+    espBoxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+
+local function setHitboxEnabled(enabled)
+    espHitboxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+
+local function setSkeletonEnabled(enabled)
+    espSkeletonEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+
+local function setBoxColor(r, g, b)
+    espBoxColor = Color3.fromRGB(r, g, b)
+    updateAllBoxColor(espBoxColor)
+end
+local function setHitboxColor(r, g, b)
+    espHitboxColor = Color3.fromRGB(r, g, b)
+    updateAllHitboxColor(espHitboxColor)
+end
+local function setSkeletonColor(r, g, b)
+    espSkeletonColor = Color3.fromRGB(r, g, b)
+    updateAllSkeletonColor(espSkeletonColor)
+end
 
 -- ===== ВКЛАДКА PLAYERS =====
 local function createPlayersContent()
@@ -1345,7 +1812,6 @@ local function createPlayersContent()
     rebuildAllCards()
     return container
 end
-
 -- ===== GENERAL =====
 local function createGeneralContent()
     local content = Instance.new("ScrollingFrame")
@@ -1450,7 +1916,132 @@ local function createMiscContent()
     return content
 end
 
--- Остальные вкладки
+-- ===== MOVEMENT =====
+local function createMovementContent()
+    local content = Instance.new("ScrollingFrame")
+    content.Name = "Content_Movement"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = COLORS.Border
+    content.CanvasSize = UDim2.new(0, 0, 0, 360)
+    content.Visible = false
+    content.Parent = ContentFrame
+
+    createToggle(content, "Noclip", 10, function(enabled)
+        if enabled then enableNoclip() else disableNoclip() end
+    end)
+
+    createToggle(content, "Speedhack", 50, function(enabled)
+        if enabled then enableSpeedhack() else disableSpeedhack() end
+    end)
+
+    createSlider(content, "Speed (At 200+, anti-cheat can be triggered)", 85, 1, 1000, 16, function(value)
+        setSpeedhackSpeed(value)
+    end)
+
+    createToggle(content, "Fly", 135, function(enabled)
+        if enabled then
+            if speedhackEnabled then
+                disableSpeedhack()
+            end
+            startFly()
+        else
+            stopFly()
+        end
+    end)
+
+    createSlider(content, "Fly Speed (At 200+, anti-cheat can be triggered)", 170, 1, 1000, 50, function(value)
+        setFlySpeed(value)
+    end)
+
+    createToggle(content, "Infinitejump", 220, function(enabled)
+        if enabled then enableInfinityJump() else disableInfinityJump() end
+    end)
+
+    return content
+end
+
+-- ===== VISUAL =====
+local espSettingsFrame = nil
+
+local function createVisualContent()
+    local content = Instance.new("ScrollingFrame")
+    content.Name = "Content_Visual"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = COLORS.Border
+    content.CanvasSize = UDim2.new(0, 0, 0, 600)
+    content.Visible = false
+    content.Parent = ContentFrame
+
+    -- Toggle ESP
+    createToggle(content, "ESP", 10, function(enabled)
+        if enabled then enableESP() else disableESP() end
+    end)
+
+    -- Раскрывающийся фрейм с настройками
+    local settingsFrame = Instance.new("Frame")
+    settingsFrame.Name = "ESP_Settings"
+    settingsFrame.Size = UDim2.new(1, 0, 0, 0)
+    settingsFrame.Position = UDim2.new(0, 0, 0, 50)
+    settingsFrame.BackgroundColor3 = COLORS.Background
+    settingsFrame.BorderSizePixel = 1
+    settingsFrame.BorderColor3 = COLORS.Border
+    settingsFrame.ClipsDescendants = true
+    settingsFrame.Visible = false
+    settingsFrame.Parent = content
+    espSettingsFrame = settingsFrame
+
+    local yOffset = 10
+    -- Box Toggle
+    createToggle(settingsFrame, "Box", yOffset, function(enabled)
+        setBoxEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Box RGB Sliders
+    createSlider(settingsFrame, "Box R", yOffset, 0, 255, 255, function(v) setBoxColor(v, espBoxColor.G*255, espBoxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Box G", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, v, espBoxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Box B", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, espBoxColor.G*255, v) end)
+    yOffset = yOffset + 40
+
+    -- Hitbox Toggle
+    createToggle(settingsFrame, "Hitbox", yOffset, function(enabled)
+        setHitboxEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Hitbox RGB Sliders
+    createSlider(settingsFrame, "Hitbox R", yOffset, 0, 255, 255, function(v) setHitboxColor(v, espHitboxColor.G*255, espHitboxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Hitbox G", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, v, espHitboxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Hitbox B", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, espHitboxColor.G*255, v) end)
+    yOffset = yOffset + 40
+
+    -- Skeleton Toggle
+    createToggle(settingsFrame, "Skeleton", yOffset, function(enabled)
+        setSkeletonEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Skeleton RGB Sliders
+    createSlider(settingsFrame, "Skeleton R", yOffset, 0, 255, 0, function(v) setSkeletonColor(v, espSkeletonColor.G*255, espSkeletonColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Skeleton G", yOffset, 0, 255, 255, function(v) setSkeletonColor(espSkeletonColor.R*255, v, espSkeletonColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Skeleton B", yOffset, 0, 255, 0, function(v) setSkeletonColor(espSkeletonColor.R*255, espSkeletonColor.G*255, v) end)
+    yOffset = yOffset + 40
+
+    settingsFrame.Size = UDim2.new(1, 0, 0, yOffset)
+
+    return content
+end
+
+-- ===== ОСТАЛЬНЫЕ ВКЛАДКИ =====
 local function createEmptyContent(name)
     local content = Instance.new("Frame")
     content.Name = "Content_" .. name
@@ -1472,7 +2063,7 @@ local function createEmptyContent(name)
 end
 
 -- Сайдбар и переключение
-local buttonNames = {"General", "Players", "Misc", "test4"}
+local buttonNames = {"General", "Players", "Misc", "Movement", "Visual"}
 local sidebarButtons = {}
 local buttonSeparators = {}
 local activeButton = nil
@@ -1481,7 +2072,8 @@ local activeContent = {}
 activeContent["General"] = createGeneralContent()
 activeContent["Players"] = createPlayersContent()
 activeContent["Misc"] = createMiscContent()
-activeContent["test4"] = createEmptyContent("test4")
+activeContent["Movement"] = createMovementContent()
+activeContent["Visual"] = createVisualContent()
 
 for i, name in ipairs(buttonNames) do
     local button = Instance.new("TextButton")
@@ -1575,6 +2167,11 @@ local function destroyScript()
     if antiAfkRunning then stopAntiAFK() end
     destroyFPSWindow()
     destroyPingWindow()
+    disableNoclip()
+    disableSpeedhack()
+    stopFly()
+    disableInfinityJump()
+    disableESP()
 
     local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
     TweenService:Create(TitleBar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
