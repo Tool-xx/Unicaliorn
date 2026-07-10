@@ -23,12 +23,12 @@ return function(Context)
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 380)
+    content.CanvasSize = UDim2.new(0, 0, 0, 300)
     content.Visible = false
     content.Parent = Context.UI.ContentFrame
 
     -- ============================================================
-    -- ESP HEADER (main toggle + settings expand)
+    -- ESP HEADER
     -- ============================================================
     local espHeader = Instance.new("Frame")
     espHeader.Name = "ESPHeader"
@@ -49,7 +49,6 @@ return function(Context)
     espLabel.TextXAlignment = Enum.TextXAlignment.Left
     espLabel.Parent = espHeader
 
-    -- ESP Toggle BG
     local espToggleBg = Instance.new("TextButton")
     espToggleBg.Size = UDim2.new(0, 50, 0, 22)
     espToggleBg.Position = UDim2.new(1, -55, 0.5, -11)
@@ -67,7 +66,6 @@ return function(Context)
     espToggleKnob.BorderSizePixel = 0
     espToggleKnob.Parent = espToggleBg
 
-    -- Settings Toggle Button (▼/▲)
     local settingsToggleBtn = Instance.new("TextButton")
     settingsToggleBtn.Name = "SettingsToggle"
     settingsToggleBtn.Size = UDim2.new(0, 30, 0, 22)
@@ -82,7 +80,6 @@ return function(Context)
     settingsToggleBtn.AutoButtonColor = false
     settingsToggleBtn.Parent = espHeader
 
-    -- ESP Toggle Logic
     local espToggleEnabled = false
     espToggleBg.MouseButton1Click:Connect(function()
         espToggleEnabled = not espToggleEnabled
@@ -101,7 +98,6 @@ return function(Context)
         end
     end)
 
-    -- Sync with current state
     if FeatureState.espEnabled then
         espToggleEnabled = true
         espToggleBg.BackgroundColor3 = COLORS.ToggleOn
@@ -121,134 +117,76 @@ return function(Context)
     settingsFrame.Parent = content
 
     local settingsOpen = false
-    local targetHeight = 230
 
     settingsToggleBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
         if settingsOpen then
             settingsToggleBtn.Text = "▲"
-            TweenService:Create(settingsFrame, TWEEN.Open, {Size = UDim2.new(1, -20, 0, targetHeight)}):Play()
+            TweenService:Create(settingsFrame, TWEEN.Open, {Size = UDim2.new(1, -20, 0, 210)}):Play()
         else
             settingsToggleBtn.Text = "▼"
             TweenService:Create(settingsFrame, TWEEN.Close, {Size = UDim2.new(1, -20, 0, 0)}):Play()
         end
     end)
 
-    -- ============================================================
-    -- ESP SUB-TOGGLES
-    -- ============================================================
-    local yOffset = 10
-
-    -- Box Toggle
-    local boxToggle = Components.createToggle(settingsFrame, "Box", yOffset, function(enabled)
+    -- ESP Toggles
+    local yOff = 10
+    local boxToggle = Components.createToggle(settingsFrame, "Box", yOff, function(en)
         if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableBox()
-            else
-                Context.Features.ESP.DisableBox()
-            end
+            if en then Context.Features.ESP.EnableBox() else Context.Features.ESP.DisableBox() end
         end
     end)
-    if FeatureState.espBoxEnabled then
-        boxToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
+    if FeatureState.espBoxEnabled then boxToggle.setEnabled(true) end
+    yOff = yOff + 40
 
-    -- Hitbox Toggle
-    local hitboxToggle = Components.createToggle(settingsFrame, "Hitbox", yOffset, function(enabled)
+    local hitboxToggle = Components.createToggle(settingsFrame, "Hitbox", yOff, function(en)
         if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableHitbox()
-            else
-                Context.Features.ESP.DisableHitbox()
-            end
+            if en then Context.Features.ESP.EnableHitbox() else Context.Features.ESP.DisableHitbox() end
         end
     end)
-    if FeatureState.espHitboxEnabled then
-        hitboxToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
+    if FeatureState.espHitboxEnabled then hitboxToggle.setEnabled(true) end
+    yOff = yOff + 40
 
-    -- Health Bar Toggle
-    local healthToggle = Components.createToggle(settingsFrame, "Health Bar", yOffset, function(enabled)
+    local healthToggle = Components.createToggle(settingsFrame, "Health Bar", yOff, function(en)
         if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableHealth()
-            else
-                Context.Features.ESP.DisableHealth()
-            end
+            if en then Context.Features.ESP.EnableHealth() else Context.Features.ESP.DisableHealth() end
         end
     end)
-    if FeatureState.espHealthEnabled then
-        healthToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
+    if FeatureState.espHealthEnabled then healthToggle.setEnabled(true) end
+    yOff = yOff + 40
 
-    -- Name Toggle
-    local nameToggle = Components.createToggle(settingsFrame, "Name", yOffset, function(enabled)
+    local nameToggle = Components.createToggle(settingsFrame, "Name", yOff, function(en)
         if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableName()
-            else
-                Context.Features.ESP.DisableName()
-            end
+            if en then Context.Features.ESP.EnableName() else Context.Features.ESP.DisableName() end
         end
     end)
-    if FeatureState.espNameEnabled then
-        nameToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
+    if FeatureState.espNameEnabled then nameToggle.setEnabled(true) end
+    yOff = yOff + 40
 
-    -- Distance Toggle
-    local distanceToggle = Components.createToggle(settingsFrame, "Distance", yOffset, function(enabled)
+    local distanceToggle = Components.createToggle(settingsFrame, "Distance", yOff, function(en)
         if Context.Features.ESP then
-            if enabled then
-                Context.Features.ESP.EnableDistance()
-            else
-                Context.Features.ESP.DisableDistance()
-            end
+            if en then Context.Features.ESP.EnableDistance() else Context.Features.ESP.DisableDistance() end
         end
     end)
-    if FeatureState.espDistanceEnabled then
-        distanceToggle.setEnabled(true)
-    end
-    yOffset = yOffset + 40
-
-    targetHeight = yOffset + 10
-    settingsFrame.Size = UDim2.new(1, -20, 0, 0)
+    if FeatureState.espDistanceEnabled then distanceToggle.setEnabled(true) end
 
     -- ============================================================
-    -- BOOST FPS SECTION
+    -- BOOST FPS (compact, right after ESP section)
     -- ============================================================
-    local boostSep = Instance.new("Frame")
-    boostSep.Size = UDim2.new(1, -20, 0, 1)
-    boostSep.Position = UDim2.new(0, 10, 0, 260)
-    boostSep.BackgroundColor3 = COLORS.Border
-    boostSep.BorderSizePixel = 0
-    boostSep.Parent = content
+    local boostY = 265
 
-    local boostLabel = Instance.new("TextLabel")
-    boostLabel.Size = UDim2.new(1, -20, 0, 20)
-    boostLabel.Position = UDim2.new(0, 10, 0, 270)
-    boostLabel.BackgroundTransparency = 1
-    boostLabel.Text = "Performance"
-    boostLabel.TextColor3 = COLORS.Text
-    boostLabel.TextSize = 14
-    boostLabel.Font = Enum.Font.GothamBold
-    boostLabel.TextXAlignment = Enum.TextXAlignment.Left
-    boostLabel.Parent = content
-
-    -- Store original values for restore
+    -- BoostFPS Logic
     local originalSettings = {}
     local boostActive = false
     local boostConnection = nil
 
     local function saveOriginalSettings()
+        local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
         originalSettings = {
-            waterWaveSize = workspace.Terrain.WaterWaveSize,
-            waterWaveSpeed = workspace.Terrain.WaterWaveSpeed,
-            waterReflectance = workspace.Terrain.WaterReflectance,
-            waterTransparency = workspace.Terrain.WaterTransparency,
+            waterWaveSize = Terrain and Terrain.WaterWaveSize or 0.15,
+            waterWaveSpeed = Terrain and Terrain.WaterWaveSpeed or 10,
+            waterReflectance = Terrain and Terrain.WaterReflectance or 1,
+            waterTransparency = Terrain and Terrain.WaterTransparency or 0.3,
             globalShadows = Lighting.GlobalShadows,
             fogEnd = Lighting.FogEnd,
             fogStart = Lighting.FogStart,
@@ -264,7 +202,6 @@ return function(Context)
         if boostActive then return end
         boostActive = true
         print("[BoostFPS] Enabled")
-
         saveOriginalSettings()
 
         local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
@@ -274,22 +211,14 @@ return function(Context)
             Terrain.WaterReflectance = 0
             Terrain.WaterTransparency = 1
         end
-
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
         Lighting.FogStart = 9e9
-
-        pcall(function()
-            settings().Rendering.QualityLevel = 1
-        end)
+        pcall(function() settings().Rendering.QualityLevel = 1 end)
 
         for _, v in pairs(game:GetDescendants()) do
             if v:IsA("BasePart") then
-                originalSettings.parts[v] = {
-                    castShadow = v.CastShadow,
-                    material = v.Material,
-                    reflectance = v.Reflectance,
-                }
+                originalSettings.parts[v] = {castShadow = v.CastShadow, material = v.Material, reflectance = v.Reflectance}
                 v.CastShadow = false
                 v.Material = Enum.Material.Plastic
                 v.Reflectance = 0
@@ -301,7 +230,6 @@ return function(Context)
                 v.Lifetime = NumberRange.new(0)
             end
         end
-
         for _, v in pairs(Lighting:GetDescendants()) do
             if v:IsA("PostEffect") then
                 originalSettings.postEffects[v] = v.Enabled
@@ -309,14 +237,11 @@ return function(Context)
             end
         end
 
-        -- Auto-destroy new effects
         boostConnection = workspace.DescendantAdded:Connect(function(child)
             task.spawn(function()
                 if child:IsA("ForceField") or child:IsA("Sparkles") or child:IsA("Smoke") or child:IsA("Fire") or child:IsA("Beam") then
                     RunService.Heartbeat:Wait()
-                    if boostActive then
-                        child:Destroy()
-                    end
+                    if boostActive then child:Destroy() end
                 elseif child:IsA("BasePart") then
                     child.CastShadow = false
                 end
@@ -328,11 +253,7 @@ return function(Context)
         if not boostActive then return end
         boostActive = false
         print("[BoostFPS] Disabled")
-
-        if boostConnection then
-            boostConnection:Disconnect()
-            boostConnection = nil
-        end
+        if boostConnection then boostConnection:Disconnect() boostConnection = nil end
 
         local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
         if Terrain then
@@ -341,14 +262,10 @@ return function(Context)
             Terrain.WaterReflectance = originalSettings.waterReflectance or 1
             Terrain.WaterTransparency = originalSettings.waterTransparency or 0.3
         end
-
         Lighting.GlobalShadows = originalSettings.globalShadows ~= false
         Lighting.FogEnd = originalSettings.fogEnd or 100000
         Lighting.FogStart = originalSettings.fogStart or 0
-
-        pcall(function()
-            settings().Rendering.QualityLevel = originalSettings.qualityLevel or 7
-        end)
+        pcall(function() settings().Rendering.QualityLevel = originalSettings.qualityLevel or 7 end)
 
         for part, saved in pairs(originalSettings.parts) do
             if part and part.Parent then
@@ -357,40 +274,39 @@ return function(Context)
                 part.Reflectance = saved.reflectance
             end
         end
-
-        for decal, savedTransparency in pairs(originalSettings.decals) do
-            if decal and decal.Parent then
-                decal.Transparency = savedTransparency
-            end
+        for decal, t in pairs(originalSettings.decals) do
+            if decal and decal.Parent then decal.Transparency = t end
         end
-
-        for emitter, savedLifetime in pairs(originalSettings.emitters) do
-            if emitter and emitter.Parent then
-                emitter.Lifetime = savedLifetime
-            end
+        for emitter, lt in pairs(originalSettings.emitters) do
+            if emitter and emitter.Parent then emitter.Lifetime = lt end
         end
-
-        for effect, savedEnabled in pairs(originalSettings.postEffects) do
-            if effect and effect.Parent then
-                effect.Enabled = savedEnabled
-            end
+        for effect, en in pairs(originalSettings.postEffects) do
+            if effect and effect.Parent then effect.Enabled = en end
         end
-
         originalSettings = {}
     end
 
-    -- BoostFPS Toggle
-    local boostToggle = Components.createToggle(content, "Boost FPS", 300, function(enabled)
-        if enabled then
-            applyBoostFPS()
-        else
-            restoreFPS()
-        end
+    -- Boost FPS Toggle with warning label
+    local boostToggle = Components.createToggle(content, "Boost FPS", boostY, function(en)
+        if en then applyBoostFPS() else restoreFPS() end
     end)
+
+    -- Warning label next to Boost FPS
+    local warningLabel = Instance.new("TextLabel")
+    warningLabel.Name = "BoostWarning"
+    warningLabel.Size = UDim2.new(1, -20, 0, 14)
+    warningLabel.Position = UDim2.new(0, 10, 0, boostY + 32)
+    warningLabel.BackgroundTransparency = 1
+    warningLabel.Text = "(The game may freeze for a few seconds)"
+    warningLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    warningLabel.TextSize = 10
+    warningLabel.Font = Enum.Font.Gotham
+    warningLabel.TextXAlignment = Enum.TextXAlignment.Left
+    warningLabel.Parent = content
 
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded (full ESP suite + BoostFPS).")
+    print("[Tab] Visual loaded (compact layout + BoostFPS).")
     return content
 end
