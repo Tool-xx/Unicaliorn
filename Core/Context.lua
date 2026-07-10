@@ -96,14 +96,11 @@ return {
     -- FEATURE STATE (shared across modules)
     -- ============================================================
     FeatureState = {
-        -- ESP
+        -- ESP (colors are dynamic gradient, no static storage needed)
         espEnabled = false,
         espBoxEnabled = true,
-        espBoxColor = nil,          -- set from Config in init
         espHitboxEnabled = false,
-        espHitboxColor = nil,       -- set from Config in init
         espSkeletonEnabled = false,
-        espSkeletonColor = nil,     -- set from Config in init
         espHighlights = {},
         espPlayerAddedConn = nil,
         espCharacterAddedConns = {},
