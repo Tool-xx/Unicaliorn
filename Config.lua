@@ -64,14 +64,15 @@ return {
     },
 
     -- ============================================================
-    -- ESP GRADIENT SETTINGS (dynamic black-white gradient)
+    -- ESP NEON GREEN GRADIENT SETTINGS
+    -- Dynamic oscillation between two bright green shades
     -- ============================================================
     ESP = {
-        -- Base colors for the gradient cycle
-        GradientColor1  = Color3.fromRGB(255, 255, 255),  -- White
-        GradientColor2  = Color3.fromRGB(0, 0, 0),        -- Black
-        -- Cycle speed: how fast the gradient shifts (seconds per full cycle)
-        GradientSpeed   = 3,
+        -- Bright neon green shades
+        GradientColor1  = Color3.fromRGB(0, 255, 128),   -- Bright mint green
+        GradientColor2  = Color3.fromRGB(0, 255, 64),    -- Bright lime green
+        -- Cycle speed: seconds per full oscillation
+        GradientSpeed   = 2,
     },
 
     -- ============================================================
