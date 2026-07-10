@@ -1,21 +1,75 @@
 -- Utils/Helpers.lua
 -- Shared helper functions used across Features and Tabs
--- ESP skeleton, color updates, safe operations
+-- ESP skeleton, gradient color system, safe operations
 -- Receives Context, populates Context.Utils
 
 return function(Context)
     local TweenService = Context.Services.TweenService
+    local RunService = Context.Services.RunService
     local Config = Context.Config
     local COLORS = Config.COLORS
-    local TWEEN = Config.TWEEN
     local FeatureState = Context.FeatureState
 
     local Utils = {}
 
     -- ============================================================
+    -- GRADIENT COLOR SYSTEM
+    -- ============================================================
+    local gradientConnection = nil
+    local gradientTime = 0
+
+    local function lerpColor3(a, b, t)
+        return Color3.new(
+            a.R + (b.R - a.R) * t,
+            a.G + (b.G - a.G) * t,
+            a.B + (b.B - a.B) * t
+        )
+    end
+
+    local function getGradientColor()
+        local speed = Config.ESP.GradientSpeed
+        local c1 = Config.ESP.GradientColor1
+        local c2 = Config.ESP.GradientColor2
+        -- Smooth sine wave oscillation between c1 and c2
+        local t = (math.sin(gradientTime * math.pi * 2 / speed) + 1) / 2
+        return lerpColor3(c1, c2, t)
+    end
+
+    function Utils.startGradientCycle()
+        if gradientConnection then return end
+        gradientConnection = RunService.Heartbeat:Connect(function(dt)
+            gradientTime = gradientTime + dt
+            local color = getGradientColor()
+            -- Update all active ESP elements with the gradient color
+            for _, data in pairs(FeatureState.espHighlights) do
+                if data.box then
+                    data.box.FillColor = color
+                    data.box.OutlineColor = color
+                end
+                if data.hitbox then
+                    data.hitbox.FillColor = color
+                end
+                if data.skeleton then
+                    for _, beam in ipairs(data.skeleton) do
+                        beam.Color = ColorSequence.new(color)
+                    end
+                end
+            end
+        end)
+    end
+
+    function Utils.stopGradientCycle()
+        if gradientConnection then
+            gradientConnection:Disconnect()
+            gradientConnection = nil
+        end
+    end
+
+    -- ============================================================
     -- CREATE SKELETON BEAMS
     -- ============================================================
-    function Utils.createSkeleton(char, color)
+    function Utils.createSkeleton(char)
+        local currentColor = getGradientColor()
         local beams = {}
         for _, bone in ipairs(Config.SKELETON_BONES) do
             local part0 = char:FindFirstChild(bone[1])
@@ -26,7 +80,7 @@ return function(Context)
                 local beam = Instance.new("Beam")
                 beam.Attachment0 = attach0
                 beam.Attachment1 = attach1
-                beam.Color = ColorSequence.new(color)
+                beam.Color = ColorSequence.new(currentColor)
                 beam.Width0 = 0.05
                 beam.Width1 = 0.05
                 beam.Parent = char
@@ -70,6 +124,7 @@ return function(Context)
         local char = player.Character
         if not char then return end
 
+        local currentColor = getGradientColor()
         local box, hitbox, skeleton
 
         if FeatureState.espBoxEnabled then
@@ -77,8 +132,8 @@ return function(Context)
             box.Adornee = char
             box.FillTransparency = 1
             box.OutlineTransparency = 0
-            box.FillColor = FeatureState.espBoxColor
-            box.OutlineColor = FeatureState.espBoxColor
+            box.FillColor = currentColor
+            box.OutlineColor = currentColor
             box.Parent = char
         end
 
@@ -87,51 +142,15 @@ return function(Context)
             hitbox.Adornee = char
             hitbox.FillTransparency = 0.3
             hitbox.OutlineTransparency = 1
-            hitbox.FillColor = FeatureState.espHitboxColor
+            hitbox.FillColor = currentColor
             hitbox.Parent = char
         end
 
         if FeatureState.espSkeletonEnabled then
-            skeleton = Utils.createSkeleton(char, FeatureState.espSkeletonColor)
+            skeleton = Utils.createSkeleton(char)
         end
 
         FeatureState.espHighlights[player] = {box = box, hitbox = hitbox, skeleton = skeleton}
-    end
-
-    -- ============================================================
-    -- UPDATE ALL BOX COLORS
-    -- ============================================================
-    function Utils.updateAllBoxColor(color)
-        for _, data in pairs(FeatureState.espHighlights) do
-            if data.box then
-                data.box.FillColor = color
-                data.box.OutlineColor = color
-            end
-        end
-    end
-
-    -- ============================================================
-    -- UPDATE ALL HITBOX COLORS
-    -- ============================================================
-    function Utils.updateAllHitboxColor(color)
-        for _, data in pairs(FeatureState.espHighlights) do
-            if data.hitbox then
-                data.hitbox.FillColor = color
-            end
-        end
-    end
-
-    -- ============================================================
-    -- UPDATE ALL SKELETON COLORS
-    -- ============================================================
-    function Utils.updateAllSkeletonColor(color)
-        for _, data in pairs(FeatureState.espHighlights) do
-            if data.skeleton then
-                for _, beam in ipairs(data.skeleton) do
-                    beam.Color = ColorSequence.new(color)
-                end
-            end
-        end
     end
 
     -- ============================================================
@@ -174,36 +193,14 @@ return function(Context)
     end
 
     -- ============================================================
-    -- SET BOX COLOR
-    -- ============================================================
-    function Utils.setBoxColor(r, g, b)
-        FeatureState.espBoxColor = Color3.fromRGB(r, g, b)
-        Utils.updateAllBoxColor(FeatureState.espBoxColor)
-    end
-
-    -- ============================================================
-    -- SET HITBOX COLOR
-    -- ============================================================
-    function Utils.setHitboxColor(r, g, b)
-        FeatureState.espHitboxColor = Color3.fromRGB(r, g, b)
-        Utils.updateAllHitboxColor(FeatureState.espHitboxColor)
-    end
-
-    -- ============================================================
-    -- SET SKELETON COLOR
-    -- ============================================================
-    function Utils.setSkeletonColor(r, g, b)
-        FeatureState.espSkeletonColor = Color3.fromRGB(r, g, b)
-        Utils.updateAllSkeletonColor(FeatureState.espSkeletonColor)
-    end
-
-    -- ============================================================
     -- ENABLE ESP (global)
     -- ============================================================
     function Utils.enableESP()
         if FeatureState.espEnabled then return end
         FeatureState.espEnabled = true
         print("[ESP] Enabled")
+
+        Utils.startGradientCycle()
 
         for _, player in ipairs(Context.Services.Players:GetPlayers()) do
             Utils.createESP(player)
@@ -240,6 +237,8 @@ return function(Context)
         FeatureState.espEnabled = false
         print("[ESP] Disabled")
 
+        Utils.stopGradientCycle()
+
         if FeatureState.espPlayerAddedConn then
             FeatureState.espPlayerAddedConn:Disconnect()
             FeatureState.espPlayerAddedConn = nil
@@ -256,18 +255,13 @@ return function(Context)
     end
 
     -- ============================================================
-    -- INIT ESP COLORS FROM CONFIG
+    -- INIT (no static colors needed, gradient is dynamic)
     -- ============================================================
-    function Utils.initESPColors()
-        FeatureState.espBoxColor = Config.ESP.BoxColor
-        FeatureState.espHitboxColor = Config.ESP.HitboxColor
-        FeatureState.espSkeletonColor = Config.ESP.SkeletonColor
+    function Utils.initESP()
+        -- Gradient colors are computed on-the-fly, no static init needed
     end
-
-    -- Initialize colors immediately
-    Utils.initESPColors()
 
     -- Register in Context
     Context.Utils = Utils
-    print("[Helpers] Utils registered.")
+    print("[Helpers] Utils registered with dynamic gradient ESP.")
 end
