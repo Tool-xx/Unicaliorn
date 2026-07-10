@@ -1,5 +1,5 @@
 -- Unicaliorn Script
--- Universal GUI Script with Smooth Animations and Sidebar
+-- Universal GUI Script with Smooth Animations, Sidebar, and Dynamic Gradient ESP
 
 if _G.UnicaliornLoaded then return end
 _G.UnicaliornLoaded = true
@@ -7,7 +7,7 @@ _G.UnicaliornLoaded = true
 local SCRIPT_START_TIME = os.time()
 print("[Unicaliorn] Initializing...")
 
--- Сервисы
+-- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -20,7 +20,7 @@ local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Цвета
+-- Colors
 local COLORS = {
     Background = Color3.fromRGB(0, 0, 0),
     Border = Color3.fromRGB(64, 64, 64),
@@ -38,7 +38,7 @@ local COLORS = {
     MarkColor = Color3.fromRGB(255, 0, 0)
 }
 
--- TweenInfo пресеты
+-- TweenInfo presets
 local TWEEN_OPEN = TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local TWEEN_CLOSE = TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
 local TWEEN_HOVER = TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
@@ -46,7 +46,7 @@ local TWEEN_APPEAR = TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirect
 local TWEEN_FADE = TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 local TWEEN_DRAG = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
--- Глобальные переменные
+-- Global variables
 local activeSpectatePlayer = nil
 local spectateConnection = nil
 local spectateInputConnection = nil
@@ -93,198 +93,17 @@ local infinityJumpConnection = nil
 -- Visual / ESP
 local espEnabled = false
 local espBoxEnabled = true
-local espBoxColor = Color3.fromRGB(255, 255, 255)
 local espHitboxEnabled = false
-local espHitboxColor = Color3.fromRGB(255, 0, 0)
 local espSkeletonEnabled = false
-local espSkeletonColor = Color3.fromRGB(0, 255, 0)
 local espHighlights = {}
 local espPlayerAddedConn = nil
 local espCharacterAddedConns = {}
 
--- Функции ESP
-local function createSkeleton(char, color)
-    local bones = {
-        {"Head", "UpperTorso"},
-        {"UpperTorso", "LowerTorso"},
-        {"UpperTorso", "LeftUpperArm"},
-        {"LeftUpperArm", "LeftLowerArm"},
-        {"LeftLowerArm", "LeftHand"},
-        {"UpperTorso", "RightUpperArm"},
-        {"RightUpperArm", "RightLowerArm"},
-        {"RightLowerArm", "RightHand"},
-        {"LowerTorso", "LeftUpperLeg"},
-        {"LeftUpperLeg", "LeftLowerLeg"},
-        {"LeftLowerLeg", "LeftFoot"},
-        {"LowerTorso", "RightUpperLeg"},
-        {"RightUpperLeg", "RightLowerLeg"},
-        {"RightLowerLeg", "RightFoot"}
-    }
-    local beams = {}
-    for _, bone in ipairs(bones) do
-        local part0 = char:FindFirstChild(bone[1])
-        local part1 = char:FindFirstChild(bone[2])
-        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
-            local attach0 = Instance.new("Attachment", part0)
-            local attach1 = Instance.new("Attachment", part1)
-            local beam = Instance.new("Beam")
-            beam.Attachment0 = attach0
-            beam.Attachment1 = attach1
-            beam.Color = ColorSequence.new(color)
-            beam.Width0 = 0.05
-            beam.Width1 = 0.05
-            beam.Parent = char
-            table.insert(beams, beam)
-        end
-    end
-    return beams
-end
+-- Dynamic Gradient Color System
+local espGradientConnection = nil
+local espCurrentGradientColor = Color3.new(1, 1, 1)
 
-local function destroySkeleton(beams)
-    for _, beam in ipairs(beams) do
-        if beam then
-            if beam.Attachment0 then beam.Attachment0:Destroy() end
-            if beam.Attachment1 then beam.Attachment1:Destroy() end
-            beam:Destroy()
-        end
-    end
-end
-
-local function removeESP(player)
-    local data = espHighlights[player]
-    if not data then return end
-    if data.box then data.box:Destroy() end
-    if data.hitbox then data.hitbox:Destroy() end
-    if data.skeleton then destroySkeleton(data.skeleton) end
-    espHighlights[player] = nil
-end
-
-local function createESP(player)
-    removeESP(player)
-    if not espEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local box, hitbox, skeleton
-    if espBoxEnabled then
-        box = Instance.new("Highlight")
-        box.Adornee = char
-        box.FillTransparency = 1
-        box.OutlineTransparency = 0
-        box.FillColor = espBoxColor
-        box.OutlineColor = espBoxColor
-        box.Parent = char
-    end
-    if espHitboxEnabled then
-        hitbox = Instance.new("Highlight")
-        hitbox.Adornee = char
-        hitbox.FillTransparency = 0.3
-        hitbox.OutlineTransparency = 1
-        hitbox.FillColor = espHitboxColor
-        hitbox.Parent = char
-    end
-    if espSkeletonEnabled then
-        skeleton = createSkeleton(char, espSkeletonColor)
-    end
-    espHighlights[player] = {box=box, hitbox=hitbox, skeleton=skeleton}
-end
-
-local function updateAllBoxColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.box then data.box.FillColor = color; data.box.OutlineColor = color end
-    end
-end
-local function updateAllHitboxColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.hitbox then data.hitbox.FillColor = color end
-    end
-end
-local function updateAllSkeletonColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.skeleton then
-            for _, beam in ipairs(data.skeleton) do
-                beam.Color = ColorSequence.new(color)
-            end
-        end
-    end
-end
-
-local function enableESP()
-    if espEnabled then return end
-    espEnabled = true
-    print("[ESP] Enabled")
-    for _, player in ipairs(Players:GetPlayers()) do
-        createESP(player)
-        if not espCharacterAddedConns[player] then
-            espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
-                if espEnabled then createESP(player) end
-            end)
-        end
-    end
-    if not espPlayerAddedConn then
-        espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
-            if espEnabled then
-                createESP(player)
-                if not espCharacterAddedConns[player] then
-                    espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
-                        if espEnabled then createESP(player) end
-                    end)
-                end
-            end
-        end)
-    end
-end
-
-local function disableESP()
-    if not espEnabled then return end
-    espEnabled = false
-    print("[ESP] Disabled")
-    if espPlayerAddedConn then espPlayerAddedConn:Disconnect() espPlayerAddedConn = nil end
-    for _, conn in pairs(espCharacterAddedConns) do conn:Disconnect() end
-    espCharacterAddedConns = {}
-    for player in pairs(espHighlights) do removeESP(player) end
-end
-
-local function setBoxEnabled(enabled)
-    espBoxEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-local function setHitboxEnabled(enabled)
-    espHitboxEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-local function setSkeletonEnabled(enabled)
-    espSkeletonEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-local function setBoxColor(r, g, b)
-    espBoxColor = Color3.fromRGB(r, g, b)
-    updateAllBoxColor(espBoxColor)
-end
-local function setHitboxColor(r, g, b)
-    espHitboxColor = Color3.fromRGB(r, g, b)
-    updateAllHitboxColor(espHitboxColor)
-end
-local function setSkeletonColor(r, g, b)
-    espSkeletonColor = Color3.fromRGB(r, g, b)
-    updateAllSkeletonColor(espSkeletonColor)
-end
-
--- ===== UI СОЗДАНИЕ =====
+-- ===== UI CREATION =====
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "Unicaliorn"
@@ -357,7 +176,7 @@ TopSeparator.BackgroundColor3 = COLORS.Border
 TopSeparator.BorderSizePixel = 0
 TopSeparator.Parent = MainFrame
 
--- Сайдбар
+-- Sidebar
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
 Sidebar.Size = UDim2.new(0, 120, 1, -36)
@@ -381,7 +200,7 @@ SidebarButtonsContainer.Size = UDim2.new(1, 0, 1, 0)
 SidebarButtonsContainer.BackgroundTransparency = 1
 SidebarButtonsContainer.Parent = Sidebar
 
--- Контент
+-- Content
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -121, 1, -36)
@@ -391,7 +210,8 @@ ContentFrame.BorderSizePixel = 0
 ContentFrame.ClipsDescendants = true
 ContentFrame.Parent = MainFrame
 
--- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UI =====
+
+-- ===== UI HELPER FUNCTIONS =====
 local function createToggle(parent, name, yPos, callback)
     local container = Instance.new("Frame")
     container.Name = "Toggle_" .. name
@@ -591,7 +411,7 @@ local function createButton(parent, name, yPos, callback)
     return button
 end
 
--- ===== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ DRAG-ОКОН =====
+-- ===== WINDOW DRAG HELPER =====
 local function setupWindowDrag(window, dragElement)
     local connections = {}
     local dragging, dragInput, dragStart, startPos
@@ -632,6 +452,201 @@ local function setupWindowDrag(window, dragElement)
     return function()
         for _, conn in ipairs(connections) do
             conn:Disconnect()
+        end
+    end
+end
+
+
+-- ===== DYNAMIC GRADIENT COLOR SYSTEM =====
+local function getGradientColor()
+    return espCurrentGradientColor
+end
+
+local function startGradientAnimation()
+    if espGradientConnection then return end
+    local startTime = os.clock()
+    espGradientConnection = RunService.Heartbeat:Connect(function()
+        local elapsed = os.clock() - startTime
+        -- Cycle: white -> black -> white over 4 seconds
+        local t = (math.sin(elapsed * math.pi / 2) + 1) / 2
+        espCurrentGradientColor = Color3.new(1 - t, 1 - t, 1 - t)
+    end)
+end
+
+local function stopGradientAnimation()
+    if espGradientConnection then
+        espGradientConnection:Disconnect()
+        espGradientConnection = nil
+    end
+end
+
+
+-- ===== ESP FUNCTIONS =====
+local function createSkeleton(char, color)
+    local bones = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"}
+    }
+    local beams = {}
+    for _, bone in ipairs(bones) do
+        local part0 = char:FindFirstChild(bone[1])
+        local part1 = char:FindFirstChild(bone[2])
+        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
+            local attach0 = Instance.new("Attachment", part0)
+            local attach1 = Instance.new("Attachment", part1)
+            local beam = Instance.new("Beam")
+            beam.Attachment0 = attach0
+            beam.Attachment1 = attach1
+            beam.Color = ColorSequence.new(color)
+            beam.Width0 = 0.05
+            beam.Width1 = 0.05
+            beam.Parent = char
+            table.insert(beams, beam)
+        end
+    end
+    return beams
+end
+
+local function destroySkeleton(beams)
+    for _, beam in ipairs(beams) do
+        if beam then
+            if beam.Attachment0 then beam.Attachment0:Destroy() end
+            if beam.Attachment1 then beam.Attachment1:Destroy() end
+            beam:Destroy()
+        end
+    end
+end
+
+local function removeESP(player)
+    local data = espHighlights[player]
+    if not data then return end
+    if data.box then data.box:Destroy() end
+    if data.hitbox then data.hitbox:Destroy() end
+    if data.skeleton then destroySkeleton(data.skeleton) end
+    espHighlights[player] = nil
+end
+
+local function createESP(player)
+    removeESP(player)
+    if not espEnabled then return end
+    local char = player.Character
+    if not char then return end
+    local box, hitbox, skeleton
+    local currentColor = getGradientColor()
+    if espBoxEnabled then
+        box = Instance.new("Highlight")
+        box.Adornee = char
+        box.FillTransparency = 1
+        box.OutlineTransparency = 0
+        box.FillColor = currentColor
+        box.OutlineColor = currentColor
+        box.Parent = char
+    end
+    if espHitboxEnabled then
+        hitbox = Instance.new("Highlight")
+        hitbox.Adornee = char
+        hitbox.FillTransparency = 0.3
+        hitbox.OutlineTransparency = 1
+        hitbox.FillColor = currentColor
+        hitbox.Parent = char
+    end
+    if espSkeletonEnabled then
+        skeleton = createSkeleton(char, currentColor)
+    end
+    espHighlights[player] = {box=box, hitbox=hitbox, skeleton=skeleton}
+end
+
+local function updateAllESPColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.box then
+            data.box.FillColor = color
+            data.box.OutlineColor = color
+        end
+        if data.hitbox then
+            data.hitbox.FillColor = color
+        end
+        if data.skeleton then
+            for _, beam in ipairs(data.skeleton) do
+                beam.Color = ColorSequence.new(color)
+            end
+        end
+    end
+end
+
+local function enableESP()
+    if espEnabled then return end
+    espEnabled = true
+    startGradientAnimation()
+    print("[ESP] Enabled")
+    for _, player in ipairs(Players:GetPlayers()) do
+        createESP(player)
+        if not espCharacterAddedConns[player] then
+            espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                if espEnabled then createESP(player) end
+            end)
+        end
+    end
+    if not espPlayerAddedConn then
+        espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
+            if espEnabled then
+                createESP(player)
+                if not espCharacterAddedConns[player] then
+                    espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                        if espEnabled then createESP(player) end
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+local function disableESP()
+    if not espEnabled then return end
+    espEnabled = false
+    stopGradientAnimation()
+    print("[ESP] Disabled")
+    if espPlayerAddedConn then espPlayerAddedConn:Disconnect() espPlayerAddedConn = nil end
+    for _, conn in pairs(espCharacterAddedConns) do conn:Disconnect() end
+    espCharacterAddedConns = {}
+    for player in pairs(espHighlights) do removeESP(player) end
+end
+
+local function setBoxEnabled(enabled)
+    espBoxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+local function setHitboxEnabled(enabled)
+    espHitboxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+local function setSkeletonEnabled(enabled)
+    espSkeletonEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
         end
     end
 end
@@ -800,7 +815,7 @@ local function createServerInfoWindow()
     TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -200, 0.5, -250), BackgroundTransparency = 0 }):Play()
 end
 
--- ===== ПРОФИЛЬ ИГРОКА =====
+-- ===== PLAYER PROFILE =====
 local function createProfileWindow(targetPlayer)
     print("[Profile] Opened for " .. targetPlayer.Name)
     local overlay = Instance.new("Frame")
@@ -939,7 +954,7 @@ local function createProfileWindow(targetPlayer)
     TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -150, 0.5, -175), BackgroundTransparency = 0 }):Play()
 end
 
--- ===== SPECTATE (управляемая камера) =====
+-- ===== SPECTATE =====
 local function toggleSpectate(player)
     if activeSpectatePlayer == player then
         print("[Spectate] Stopped watching " .. player.Name)
@@ -1333,7 +1348,6 @@ local function startFly()
     local root = humanoid.RootPart
     if not root then return end
 
-    -- Создаём физические объекты
     flyBodyGyro = Instance.new("BodyGyro")
     flyBodyGyro.P = 9e4
     flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
@@ -1343,12 +1357,10 @@ local function startFly()
     flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
     flyBodyVelocity.Parent = root
 
-    -- Сброс управления
     flyControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
     flyLastControl = {F=0, B=0, L=0, R=0, Q=0, E=0}
     flyCurrentSpeed = 0
 
-    -- Обработчики ввода
     flyInputBegan = UserInputService.InputBegan:Connect(function(input, processed)
         if processed then return end
         local spd = flySpeed
@@ -1373,7 +1385,6 @@ local function startFly()
         end
     end)
 
-    -- Цикл полёта
     flyLoop = RunService.RenderStepped:Connect(function()
         if not flyEnabled then return end
         local camera = workspace.CurrentCamera
@@ -1430,7 +1441,6 @@ local function setFlySpeed(value)
     flySpeed = value
 end
 
--- Обработчик возрождения для Fly
 flyCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
     if flyEnabled then
         stopFly()
@@ -1440,7 +1450,7 @@ flyCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
--- ===== INFINITY JUMP (исправленный) =====
+-- ===== INFINITY JUMP =====
 local function enableInfinityJump()
     if infinityJumpEnabled then return end
     infinityJumpEnabled = true
@@ -1458,7 +1468,6 @@ local function enableInfinityJump()
         local root = hum.RootPart
         if not root then return end
 
-        -- Добавляем вертикальную скорость, сохраняя горизонтальную
         local currentVel = root.AssemblyLinearVelocity
         root.AssemblyLinearVelocity = Vector3.new(
             currentVel.X,
@@ -1479,7 +1488,8 @@ local function disableInfinityJump()
     end
 end
 
--- ===== ВКЛАДКА PLAYERS =====
+
+-- ===== PLAYERS TAB =====
 local function createPlayersContent()
     local container = Instance.new("Frame")
     container.Name = "PlayersContainer"
@@ -1489,7 +1499,6 @@ local function createPlayersContent()
     container.Visible = false
     container.Parent = ContentFrame
 
-    -- Строка поиска
     local searchFrame = Instance.new("Frame")
     searchFrame.Name = "SearchFrame"
     searchFrame.Size = UDim2.new(1, 0, 0, 30)
@@ -1520,7 +1529,6 @@ local function createPlayersContent()
     searchBox.ClearTextOnFocus = false
     searchBox.Parent = searchFrame
 
-    -- Скролл для списка игроков
     local scroll = Instance.new("ScrollingFrame")
     scroll.Name = "PlayerScroll"
     scroll.Size = UDim2.new(1, 0, 1, -30)
@@ -1605,8 +1613,10 @@ local function createPlayersContent()
         avatar.Position = UDim2.new(0, 5, 0.5, -20)
         avatar.BackgroundColor3 = COLORS.Border
         task.spawn(function()
-            local thumb = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-            avatar.Image = thumb
+            local success, thumb = pcall(function()
+                return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            end)
+            if success then avatar.Image = thumb end
         end)
         avatar.Parent = infoFrame
 
@@ -1668,7 +1678,6 @@ local function createPlayersContent()
         expandBtn.AutoButtonColor = false
         expandBtn.Parent = infoFrame
 
-        -- actionsFrame (4 кнопки: Teleport To, Spectate, View Profile, Mark)
         local actionsFrame = Instance.new("Frame")
         actionsFrame.Size = UDim2.new(1, 0, 0, 80)
         actionsFrame.Position = UDim2.new(0, 0, 0, 60)
@@ -1731,7 +1740,7 @@ local function createPlayersContent()
             updateCanvasSize()
         end)
 
-        local data = {
+                local data = {
             player = player,
             frame = card,
             healthFill = healthFill,
@@ -1745,19 +1754,7 @@ local function createPlayersContent()
         return data
     end
 
-    local function rebuildAllCards()
-        for _, child in ipairs(scroll:GetChildren()) do
-            if child:IsA("Frame") then child:Destroy() end
-        end
-        playerCards = {}
-        local playerList = Players:GetPlayers()
-        for _, player in ipairs(playerList) do
-            createPlayerCard(player)
-        end
-        updateCanvasSize()
-        if searchBox.Text ~= "" then searchPlayer(searchBox.Text) end
-    end
-
+    -- FIX: Define searchPlayer BEFORE rebuildAllCards to avoid forward reference
     local function searchPlayer(query)
         if query == "" then return end
         local foundCard = nil
@@ -1771,6 +1768,19 @@ local function createPlayersContent()
             local cardPos = foundCard.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y
             scroll.CanvasPosition = Vector2.new(0, cardPos - 5)
         end
+    end
+
+    local function rebuildAllCards()
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        playerCards = {}
+        local playerList = Players:GetPlayers()
+        for _, player in ipairs(playerList) do
+            createPlayerCard(player)
+        end
+        updateCanvasSize()
+        if searchBox.Text ~= "" then searchPlayer(searchBox.Text) end
     end
 
     Players.PlayerAdded:Connect(function(player)
@@ -1832,7 +1842,12 @@ local function createGeneralContent()
     skinImage.BackgroundColor3 = COLORS.Background
     skinImage.BorderSizePixel = 1
     skinImage.BorderColor3 = COLORS.Border
-    skinImage.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    task.spawn(function()
+        local success, thumb = pcall(function()
+            return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+        end)
+        if success then skinImage.Image = thumb end
+    end)
     skinImage.Parent = playerInfoFrame
 
     local nameLabel = Instance.new("TextLabel")
@@ -1862,9 +1877,12 @@ local function createGeneralContent()
     serverLabel.Position = UDim2.new(0, 80, 0, 52)
     serverLabel.BackgroundTransparency = 1
     local placeName = "Loading..."
-    pcall(function()
-        local info = MarketplaceService:GetProductInfo(game.PlaceId)
-        placeName = info.Name
+    task.spawn(function()
+        pcall(function()
+            local info = MarketplaceService:GetProductInfo(game.PlaceId)
+            placeName = info.Name
+            serverLabel.Text = "Server: " .. placeName
+        end)
     end)
     serverLabel.Text = "Server: " .. placeName
     serverLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -1955,7 +1973,7 @@ local function createMovementContent()
     return content
 end
 
--- ===== VISUAL =====
+-- ===== VISUAL (Dynamic Gradient ESP) =====
 local espSettingsFrame = nil
 
 local function createVisualContent()
@@ -1966,321 +1984,112 @@ local function createVisualContent()
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 600)
+    content.CanvasSize = UDim2.new(0, 0, 0, 400)
     content.Visible = false
     content.Parent = ContentFrame
 
-    -- Toggle ESP
-    local espToggle = createToggle(content, "ESP", 10, function(enabled)
-        if enabled then enableESP() else disableESP() end
+    -- ESP Toggle + Settings Toggle in one row
+    local espHeader = Instance.new("Frame")
+    espHeader.Name = "ESPHeader"
+    espHeader.Size = UDim2.new(1, -20, 0, 30)
+    espHeader.Position = UDim2.new(0, 10, 0, 10)
+    espHeader.BackgroundColor3 = COLORS.Background
+    espHeader.BorderSizePixel = 0
+    espHeader.Parent = content
+
+    local espLabel = Instance.new("TextLabel")
+    espLabel.Size = UDim2.new(1, -110, 1, 0)
+    espLabel.Position = UDim2.new(0, 5, 0, 0)
+    espLabel.BackgroundTransparency = 1
+    espLabel.Text = "ESP"
+    espLabel.TextColor3 = COLORS.Text
+    espLabel.TextSize = 14
+    espLabel.Font = Enum.Font.Gotham
+    espLabel.TextXAlignment = Enum.TextXAlignment.Left
+    espLabel.Parent = espHeader
+
+    -- Toggle BG
+    local espToggleBg = Instance.new("TextButton")
+    espToggleBg.Size = UDim2.new(0, 50, 0, 22)
+    espToggleBg.Position = UDim2.new(1, -105, 0.5, -11)
+    espToggleBg.BackgroundColor3 = COLORS.ToggleOff
+    espToggleBg.BorderSizePixel = 1
+    espToggleBg.BorderColor3 = COLORS.Border
+    espToggleBg.Text = ""
+    espToggleBg.AutoButtonColor = false
+    espToggleBg.Parent = espHeader
+
+    local espToggleKnob = Instance.new("Frame")
+    espToggleKnob.Size = UDim2.new(0, 18, 0, 18)
+    espToggleKnob.Position = UDim2.new(0, 2, 0.5, -9)
+    espToggleKnob.BackgroundColor3 = COLORS.Text
+    espToggleKnob.BorderSizePixel = 0
+    espToggleKnob.Parent = espToggleBg
+
+    -- Settings Toggle Button (▼/▲)
+    local settingsToggleBtn = Instance.new("TextButton")
+    settingsToggleBtn.Name = "SettingsToggle"
+    settingsToggleBtn.Size = UDim2.new(0, 30, 0, 22)
+    settingsToggleBtn.Position = UDim2.new(1, -35, 0.5, -11)
+    settingsToggleBtn.BackgroundColor3 = COLORS.Background
+    settingsToggleBtn.BorderSizePixel = 1
+    settingsToggleBtn.BorderColor3 = COLORS.Border
+    settingsToggleBtn.Text = "▼"
+    settingsToggleBtn.TextColor3 = COLORS.Text
+    settingsToggleBtn.TextSize = 12
+    settingsToggleBtn.Font = Enum.Font.GothamBold
+    settingsToggleBtn.AutoButtonColor = false
+    settingsToggleBtn.Parent = espHeader
+
+    -- ESP Toggle Logic
+    local espToggleEnabled = false
+    espToggleBg.MouseButton1Click:Connect(function()
+        espToggleEnabled = not espToggleEnabled
+        if espToggleEnabled then
+            TweenService:Create(espToggleBg, TWEEN_HOVER, {BackgroundColor3 = COLORS.ToggleOn}):Play()
+            TweenService:Create(espToggleKnob, TWEEN_HOVER, {Position = UDim2.new(1, -20, 0.5, -9)}):Play()
+            enableESP()
+        else
+            TweenService:Create(espToggleBg, TWEEN_HOVER, {BackgroundColor3 = COLORS.ToggleOff}):Play()
+            TweenService:Create(espToggleKnob, TWEEN_HOVER, {Position = UDim2.new(0, 2, 0.5, -9)}):Play()
+            disableESP()
+        end
     end)
 
-    -- Кнопка раскрытия настроек
-    local settingsBtn = Instance.new("TextButton")
-    settingsBtn.Name = "ESPSettingsBtn"
-    settingsBtn.Size = UDim2.new(1, -20, 0, 25)
-    settingsBtn.Position = UDim2.new(0, 10, 0, 45)
-    settingsBtn.BackgroundColor3 = COLORS.Background
-    settingsBtn.BorderSizePixel = 1
-    settingsBtn.BorderColor3 = COLORS.Border
-    settingsBtn.Text = "Settings ▼"
-    settingsBtn.TextColor3 = COLORS.Text
-    settingsBtn.TextSize = 12
-    settingsBtn.Font = Enum.Font.Gotham
-    settingsBtn.AutoButtonColor = false
-    settingsBtn.Parent = content
-
-    settingsBtn.MouseEnter:Connect(function()
-        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play()
-    end)
-    settingsBtn.MouseLeave:Connect(function()
-        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play()
-    end)
-
-    -- Раскрывающийся фрейм с настройками
+    -- Settings Frame (collapsible)
     local settingsFrame = Instance.new("Frame")
     settingsFrame.Name = "ESP_Settings"
-    settingsFrame.Size = UDim2.new(1, 0, 0, 0)  -- Начальная высота 0 (скрыт)
-    settingsFrame.Position = UDim2.new(0, 0, 0, 75)  -- Под кнопкой (было 50, теперь 75)
+    settingsFrame.Size = UDim2.new(1, -20, 0, 0)
+    settingsFrame.Position = UDim2.new(0, 10, 0, 45)
     settingsFrame.BackgroundColor3 = COLORS.Background
     settingsFrame.BorderSizePixel = 1
     settingsFrame.BorderColor3 = COLORS.Border
     settingsFrame.ClipsDescendants = true
-    settingsFrame.Visible = true  -- Видим, но высота 0
+    settingsFrame.Visible = true
     settingsFrame.Parent = content
     espSettingsFrame = settingsFrame
 
-    -- Логика раскрытия
     local settingsOpen = false
-    local targetHeight = 490  -- Высота когда раскрыто
+    local targetHeight = 300
 
-    settingsBtn.MouseButton1Click:Connect(function()
+    settingsToggleBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
         if settingsOpen then
-            settingsBtn.Text = "Settings ▲"
-            TweenService:Create(settingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+            settingsToggleBtn.Text = "▲"
+            TweenService:Create(settingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, -20, 0, targetHeight)}):Play()
         else
-            settingsBtn.Text = "Settings ▼"
-            TweenService:Create(settingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+            settingsToggleBtn.Text = "▼"
+            TweenService:Create(settingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, -20, 0, 0)}):Play()
         end
     end)
 
-    local yOffset = 10
-    -- Box Toggle
-    createToggle(settingsFrame, "Box", yOffset, function(enabled)
-        setBoxEnabled(enabled)
-    end)
-    yOffset = yOffset + 40
-    -- Box RGB Sliders
-    createSlider(settingsFrame, "Box R", yOffset, 0, 255, 255, function(v) setBoxColor(v, espBoxColor.G*255, espBoxColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Box G", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, v, espBoxColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Box B", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, espBoxColor.G*255, v) end)
-    yOffset = yOffset + 40
-
-    -- Hitbox Toggle
-    createToggle(settingsFrame, "Hitbox", yOffset, function(enabled)
-        setHitboxEnabled(enabled)
-    end)
-    yOffset = yOffset + 40
-    -- Hitbox RGB Sliders
-    createSlider(settingsFrame, "Hitbox R", yOffset, 0, 255, 255, function(v) setHitboxColor(v, espHitboxColor.G*255, espHitboxColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Hitbox G", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, v, espHitboxColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Hitbox B", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, espHitboxColor.G*255, v) end)
-    yOffset = yOffset + 40
-
-    -- Skeleton Toggle
-    createToggle(settingsFrame, "Skeleton", yOffset, function(enabled)
-        setSkeletonEnabled(enabled)
-    end)
-    yOffset = yOffset + 40
-    -- Skeleton RGB Sliders
-    createSlider(settingsFrame, "Skeleton R", yOffset, 0, 255, 0, function(v) setSkeletonColor(v, espSkeletonColor.G*255, espSkeletonColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Skeleton G", yOffset, 0, 255, 255, function(v) setSkeletonColor(espSkeletonColor.R*255, v, espSkeletonColor.B*255) end)
-    yOffset = yOffset + 40
-    createSlider(settingsFrame, "Skeleton B", yOffset, 0, 255, 0, function(v) setSkeletonColor(espSkeletonColor.R*255, espSkeletonColor.G*255, v) end)
-    yOffset = yOffset + 40
-
-    settingsFrame.Size = UDim2.new(1, 0, 0, yOffset)  -- фактическая высота содержимого
-
-    return content
-end
-
--- ===== ОСТАЛЬНЫЕ ВКЛАДКИ =====
-local function createEmptyContent(name)
-    local content = Instance.new("Frame")
-    content.Name = "Content_" .. name
-    content.Size = UDim2.new(1, 0, 1, 0)
-    content.BackgroundTransparency = 1
-    content.Visible = false
-    content.Parent = ContentFrame
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = string.upper(name)
-    label.TextColor3 = COLORS.Text
-    label.TextSize = 24
-    label.Font = Enum.Font.Gotham
-    label.TextTransparency = 1
-    label.Parent = content
-    return content
-end
-
--- Сайдбар и переключение
-local buttonNames = {"General", "Players", "Misc", "Movement", "Visual"}
-local sidebarButtons = {}
-local buttonSeparators = {}
-local activeButton = nil
-local activeContent = {}
-
-activeContent["General"] = createGeneralContent()
-activeContent["Players"] = createPlayersContent()
-activeContent["Misc"] = createMiscContent()
-activeContent["Movement"] = createMovementContent()
-activeContent["Visual"] = createVisualContent()
-
-for i, name in ipairs(buttonNames) do
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Size = UDim2.new(1, 0, 0, 40)
-    button.Position = UDim2.new(0, 0, 0, (i - 1) * 40)
-    button.BackgroundColor3 = COLORS.Background
-    button.BorderSizePixel = 0
-    button.Text = name
-    button.TextColor3 = COLORS.Text
-    button.TextSize = 14
-    button.Font = Enum.Font.Gotham
-    button.AutoButtonColor = false
-    button.Parent = SidebarButtonsContainer
-
-    if i < #buttonNames then
-        local sep = Instance.new("Frame")
-        sep.Name = "Separator"
-        sep.Size = UDim2.new(1, -20, 0, 1)
-        sep.Position = UDim2.new(0, 10, 1, 0)
-        sep.BackgroundColor3 = COLORS.Border
-        sep.BorderSizePixel = 0
-        sep.Parent = button
-        table.insert(buttonSeparators, sep)
-    end
-    table.insert(sidebarButtons, button)
-end
-
-local function setActiveButton(buttonName)
-    if activeButton == buttonName then return end
-    for _, btn in ipairs(sidebarButtons) do
-        if btn.Name == activeButton then TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play() end
-    end
-    for _, btn in ipairs(sidebarButtons) do
-        if btn.Name == buttonName then TweenService:Create(btn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonActive}):Play() end
-    end
-    for name, content in pairs(activeContent) do
-        if name == buttonName then
-            content.Visible = true
-            local label = content:FindFirstChild("TextLabel")
-            if label then TweenService:Create(label, TWEEN_OPEN, {TextTransparency = 0}):Play() end
-        else
-            content.Visible = false
-        end
-    end
-    activeButton = buttonName
-end
-
-for _, button in ipairs(sidebarButtons) do
-    button.MouseButton1Click:Connect(function() setActiveButton(button.Name) end)
-end
-task.defer(function() setActiveButton(buttonNames[1]) end)
-
--- Общие функции окна
-local isMinimized = false
-local isClosing = false
-
-local function makeDraggable(frame, dragPart)
-    local dragging, dragInput, dragStart, startPos
-    dragPart.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
-        end
-    end)
-    dragPart.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            TweenService:Create(frame, TWEEN_DRAG, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}):Play()
-        end
-    end)
-end
-
-local function setupHoverEffect(button)
-    button.MouseEnter:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end end)
-    button.MouseLeave:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play() end end)
-    button.MouseButton1Down:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TweenInfo.new(0.08), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play() end end)
-    button.MouseButton1Up:Connect(function() if activeButton ~= button.Name then TweenService:Create(button, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play() end end)
-end
-
-local function destroyScript()
-    if isClosing then return end
-    isClosing = true
-    print("[Unicaliorn] Destroying...")
-
-    if activeSpectatePlayer then toggleSpectate(activeSpectatePlayer) end
-    for player, _ in pairs(markedPlayers) do toggleMark(player) end
-    if antiAfkRunning then stopAntiAFK() end
-    destroyFPSWindow()
-    destroyPingWindow()
-    disableNoclip()
-    disableSpeedhack()
-    stopFly()
-    disableInfinityJump()
-    disableESP()
-
-    local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
-    TweenService:Create(TitleBar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    TweenService:Create(TitleLabel, TWEEN_CLOSE, {TextTransparency = 1}):Play()
-    TweenService:Create(MinimizeButton, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-    TweenService:Create(CloseButton, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-    TweenService:Create(TopSeparator, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    TweenService:Create(Sidebar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    TweenService:Create(VerticalSeparator, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    for _, button in ipairs(sidebarButtons) do TweenService:Create(button, TWEEN_CLOSE, {BackgroundTransparency = 1, TextTransparency = 1}):Play() end
-    for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play() end
-    TweenService:Create(ContentFrame, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
-    fadeOut:Play()
-    fadeOut.Completed:Wait()
-
-    for _, v in ipairs(ScreenGui:GetChildren()) do
-        if v.Name:find("Overlay") or v.Name:find("Window") then v:Destroy() end
-    end
-    ScreenGui:Destroy()
-    _G.UnicaliornLoaded = nil
-    print("[Unicaliorn] Destroyed.")
-end
-
-local function toggleMinimize()
-    if isClosing then return end
-    if not isMinimized then
-        isMinimized = true
-        TweenService:Create(Sidebar, TWEEN_CLOSE, {Size = UDim2.new(0, 120, 0, 0)}):Play()
-        TweenService:Create(ContentFrame, TWEEN_CLOSE, {Size = UDim2.new(1, -121, 0, 0)}):Play()
-        TweenService:Create(VerticalSeparator, TWEEN_CLOSE, {Size = UDim2.new(0, 1, 0, 0)}):Play()
-        for _, btn in ipairs(sidebarButtons) do TweenService:Create(btn, TWEEN_CLOSE, {TextTransparency = 1}):Play() end
-        for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play() end
-        TweenService:Create(MainFrame, TWEEN_OPEN, {Size = UDim2.new(0, 550, 0, 36)}):Play()
-        TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
-        task.delay(0.15, function()
-            MinimizeButton.Text = "□"
-            TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-        end)
-    else
-        isMinimized = false
-        TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 1}):Play()
-        task.delay(0.15, function()
-            MinimizeButton.Text = "—"
-            TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-        end)
-        TweenService:Create(MainFrame, TWEEN_OPEN, {Size = UDim2.new(0, 550, 0, 400)}):Play()
-        task.delay(0.1, function()
-            TweenService:Create(Sidebar, TWEEN_OPEN, {Size = UDim2.new(0, 120, 1, -36)}):Play()
-            TweenService:Create(ContentFrame, TWEEN_OPEN, {Size = UDim2.new(1, -121, 1, -36)}):Play()
-            TweenService:Create(VerticalSeparator, TWEEN_OPEN, {Size = UDim2.new(0, 1, 1, -36)}):Play()
-            for _, btn in ipairs(sidebarButtons) do TweenService:Create(btn, TWEEN_OPEN, {TextTransparency = 0}):Play() end
-            for _, sep in ipairs(buttonSeparators) do TweenService:Create(sep, TWEEN_OPEN, {BackgroundTransparency = 0}):Play() end
-        end)
-    end
-end
-
-MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
-CloseButton.MouseButton1Click:Connect(destroyScript)
-setupHoverEffect(MinimizeButton)
-setupHoverEffect(CloseButton)
-for _, btn in ipairs(sidebarButtons) do setupHoverEffect(btn) end
-makeDraggable(MainFrame, TitleBar)
-
-local function animateAppearance()
-    MainFrame.Position = UDim2.new(0.5, -275, 0.5, -250)
-    MainFrame.Size = UDim2.new(0, 500, 0, 350)
-    MainFrame.BackgroundTransparency = 1
-    task.wait(0.1)
-    TweenService:Create(MainFrame, TWEEN_APPEAR, { Position = UDim2.new(0.5, -275, 0.5, -200), Size = UDim2.new(0, 550, 0, 400), BackgroundTransparency = 0 }):Play()
-    TitleLabel.TextTransparency = 1
-    task.delay(0.15, function() TweenService:Create(TitleLabel, TWEEN_FADE, {TextTransparency = 0}):Play() end)
-    MinimizeButton.BackgroundTransparency = 1 MinimizeButton.TextTransparency = 1 CloseButton.BackgroundTransparency = 1 CloseButton.TextTransparency = 1
-    task.delay(0.25, function() TweenService:Create(MinimizeButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end)
-    task.delay(0.35, function() TweenService:Create(CloseButton, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end)
-    TopSeparator.BackgroundTransparency = 1 task.delay(0.3, function() TweenService:Create(TopSeparator, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end)
-    VerticalSeparator.BackgroundTransparency = 1 task.delay(0.35, function() TweenService:Create(VerticalSeparator, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end)
-    for i, btn in ipairs(sidebarButtons) do btn.BackgroundTransparency = 1 btn.TextTransparency = 1 task.delay(0.4 + i*0.05, function() TweenService:Create(btn, TWEEN_FADE, {BackgroundTransparency = 0, TextTransparency = 0}):Play() end) end
-    for i, sep in ipairs(buttonSeparators) do sep.BackgroundTransparency = 1 task.delay(0.45 + i*0.05, function() TweenService:Create(sep, TWEEN_FADE, {BackgroundTransparency = 0}):Play() end) end
-    task.delay(0.5, function() TweenService:Create(ContentFrame, TWEEN_OPEN, {Size = UDim2.new(1, -121, 1, -36)}):Play() end)
-end
-
-animateAppearance()
-print("[Unicaliorn] Loaded successfully!")
+    -- Gradient info label
+    local gradientInfo = Instance.new("TextLabel")
+    gradientInfo.Size = UDim2.new(1, -10, 0, 20)
+    gradientInfo.Position = UDim2.new(0, 5, 0, 5)
+    gradientInfo.BackgroundTransparency = 1
+    gradientInfo.Text = "Color: Dynamic Gradient (White <-> Black)"
+    gradientInfo.TextColor3 = Color3.fromRGB(180, 180, 180)
+    gradientInfo.TextSize = 11
+    gradientInfo.Font = Enum.Font.Gotham
+    gradientInfo.TextXAlignment = Enum.Text
