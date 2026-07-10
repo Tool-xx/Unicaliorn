@@ -1,5 +1,5 @@
 -- Tabs/Visual.lua
--- Visual tab: ESP toggle + simple toggles for Box, Hitbox
+-- Visual tab: ESP toggle + toggles for Box, Hitbox, Health, Name, Distance
 -- All ESP uses dynamic neon green gradient (no color selection)
 -- Receives Context, returns tab content frame
 
@@ -21,7 +21,7 @@ return function(Context)
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 220)
+    content.CanvasSize = UDim2.new(0, 0, 0, 340)
     content.Visible = false
     content.Parent = Context.UI.ContentFrame
 
@@ -119,7 +119,7 @@ return function(Context)
     settingsFrame.Parent = content
 
     local settingsOpen = false
-    local targetHeight = 110
+    local targetHeight = 230
 
     settingsToggleBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
@@ -133,7 +133,7 @@ return function(Context)
     end)
 
     -- ============================================================
-    -- ESP SUB-TOGGLES (Box, Hitbox) - NO GEAR ICONS
+    -- ESP SUB-TOGGLES
     -- ============================================================
     local yOffset = 10
 
@@ -167,26 +167,57 @@ return function(Context)
     end
     yOffset = yOffset + 40
 
+    -- Health Bar Toggle
+    local healthToggle = Components.createToggle(settingsFrame, "Health Bar", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableHealth()
+            else
+                Context.Features.ESP.DisableHealth()
+            end
+        end
+    end)
+    if FeatureState.espHealthEnabled then
+        healthToggle.setEnabled(true)
+    end
+    yOffset = yOffset + 40
+
+    -- Name Toggle
+    local nameToggle = Components.createToggle(settingsFrame, "Name", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableName()
+            else
+                Context.Features.ESP.DisableName()
+            end
+        end
+    end)
+    if FeatureState.espNameEnabled then
+        nameToggle.setEnabled(true)
+    end
+    yOffset = yOffset + 40
+
+    -- Distance Toggle
+    local distanceToggle = Components.createToggle(settingsFrame, "Distance", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableDistance()
+            else
+                Context.Features.ESP.DisableDistance()
+            end
+        end
+    end)
+    if FeatureState.espDistanceEnabled then
+        distanceToggle.setEnabled(true)
+    end
+    yOffset = yOffset + 40
+
     targetHeight = yOffset + 10
     settingsFrame.Size = UDim2.new(1, -20, 0, 0)
-
-    -- ============================================================
-    -- GRADIENT INFO LABEL
-    -- ============================================================
-    local gradientLabel = Instance.new("TextLabel")
-    gradientLabel.Size = UDim2.new(1, -20, 0, 20)
-    gradientLabel.Position = UDim2.new(0, 10, 0, 170)
-    gradientLabel.BackgroundTransparency = 1
-    gradientLabel.Text = "ESP uses dynamic neon green glow"
-    gradientLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
-    gradientLabel.TextSize = 11
-    gradientLabel.Font = Enum.Font.Gotham
-    gradientLabel.TextXAlignment = Enum.TextXAlignment.Left
-    gradientLabel.Parent = content
 
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded (neon green ESP, no color picker).")
+    print("[Tab] Visual loaded (full ESP suite).")
     return content
 end
