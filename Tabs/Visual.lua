@@ -166,7 +166,7 @@ return function(Context)
     local boostContainer = Instance.new("Frame")
     boostContainer.Name = "BoostContainer"
     boostContainer.Size = UDim2.new(1, -20, 0, 60)
-    boostContainer.Position = UDim2.new(0, 10, 0, 50) -- starts right below header (when settings collapsed)
+    boostContainer.Position = UDim2.new(0, 10, 0, 50)
     boostContainer.BackgroundTransparency = 1
     boostContainer.BorderSizePixel = 0
     boostContainer.Parent = content
@@ -282,10 +282,14 @@ return function(Context)
         originalSettings = {}
     end
 
-    -- Boost FPS Toggle inside container
+    -- Boost FPS Toggle inside container — убираем вложенный отступ, т.к. контейнер уже даёт 10px слева
     local boostToggle = Components.createToggle(boostContainer, "Boost FPS", 0, function(en)
         if en then applyBoostFPS() else restoreFPS() end
     end)
+
+    -- Переопределяем позицию контейнера тоггла, чтобы убрать лишний отступ
+    boostToggle.container.Position = UDim2.new(0, 0, 0, 0)
+    boostToggle.container.Size = UDim2.new(1, 0, 0, 30)
 
     -- Warning label inside container
     local warningLabel = Instance.new("TextLabel")
