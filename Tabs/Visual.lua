@@ -1,6 +1,7 @@
 -- Tabs/Visual.lua
 -- Visual tab: ESP toggle + toggles for Box, Hitbox, Health, Name, Distance, BoostFPS
 -- All ESP uses dynamic neon green gradient (no color selection)
+-- Boost FPS moves smoothly with ESP settings expand/collapse
 -- Receives Context, returns tab content frame
 
 return function(Context)
@@ -116,20 +117,7 @@ return function(Context)
     settingsFrame.Visible = true
     settingsFrame.Parent = content
 
-    local settingsOpen = false
-
-    settingsToggleBtn.MouseButton1Click:Connect(function()
-        settingsOpen = not settingsOpen
-        if settingsOpen then
-            settingsToggleBtn.Text = "▲"
-            TweenService:Create(settingsFrame, TWEEN.Open, {Size = UDim2.new(1, -20, 0, 210)}):Play()
-        else
-            settingsToggleBtn.Text = "▼"
-            TweenService:Create(settingsFrame, TWEEN.Close, {Size = UDim2.new(1, -20, 0, 0)}):Play()
-        end
-    end)
-
-    -- ESP Toggles
+    -- ESP Toggles inside settings
     local yOff = 10
     local boxToggle = Components.createToggle(settingsFrame, "Box", yOff, function(en)
         if Context.Features.ESP then
@@ -170,10 +158,18 @@ return function(Context)
     end)
     if FeatureState.espDistanceEnabled then distanceToggle.setEnabled(true) end
 
+    local settingsContentHeight = yOff + 35 -- total height of settings content
+
     -- ============================================================
-    -- BOOST FPS (compact, right after ESP section)
+    -- BOOST FPS CONTAINER (moves with settings)
     -- ============================================================
-    local boostY = 265
+    local boostContainer = Instance.new("Frame")
+    boostContainer.Name = "BoostContainer"
+    boostContainer.Size = UDim2.new(1, -20, 0, 60)
+    boostContainer.Position = UDim2.new(0, 10, 0, 50) -- starts right below header (when settings collapsed)
+    boostContainer.BackgroundTransparency = 1
+    boostContainer.BorderSizePixel = 0
+    boostContainer.Parent = content
 
     -- BoostFPS Logic
     local originalSettings = {}
@@ -286,27 +282,49 @@ return function(Context)
         originalSettings = {}
     end
 
-    -- Boost FPS Toggle with warning label
-    local boostToggle = Components.createToggle(content, "Boost FPS", boostY, function(en)
+    -- Boost FPS Toggle inside container
+    local boostToggle = Components.createToggle(boostContainer, "Boost FPS", 0, function(en)
         if en then applyBoostFPS() else restoreFPS() end
     end)
 
-    -- Warning label next to Boost FPS
+    -- Warning label inside container
     local warningLabel = Instance.new("TextLabel")
     warningLabel.Name = "BoostWarning"
-    warningLabel.Size = UDim2.new(1, -20, 0, 14)
-    warningLabel.Position = UDim2.new(0, 10, 0, boostY + 32)
+    warningLabel.Size = UDim2.new(1, 0, 0, 14)
+    warningLabel.Position = UDim2.new(0, 0, 0, 32)
     warningLabel.BackgroundTransparency = 1
     warningLabel.Text = "(The game may freeze for a few seconds)"
     warningLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
     warningLabel.TextSize = 10
     warningLabel.Font = Enum.Font.Gotham
     warningLabel.TextXAlignment = Enum.TextXAlignment.Left
-    warningLabel.Parent = content
+    warningLabel.Parent = boostContainer
+
+    -- ============================================================
+    -- ANIMATE SETTINGS + BOOST TOGETHER
+    -- ============================================================
+    local settingsOpen = false
+
+    settingsToggleBtn.MouseButton1Click:Connect(function()
+        settingsOpen = not settingsOpen
+        if settingsOpen then
+            settingsToggleBtn.Text = "▲"
+            -- Expand settings
+            TweenService:Create(settingsFrame, TWEEN.Open, {Size = UDim2.new(1, -20, 0, settingsContentHeight)}):Play()
+            -- Move boost down
+            TweenService:Create(boostContainer, TWEEN.Open, {Position = UDim2.new(0, 10, 0, 45 + settingsContentHeight + 5)}):Play()
+        else
+            settingsToggleBtn.Text = "▼"
+            -- Collapse settings
+            TweenService:Create(settingsFrame, TWEEN.Close, {Size = UDim2.new(1, -20, 0, 0)}):Play()
+            -- Move boost up
+            TweenService:Create(boostContainer, TWEEN.Close, {Position = UDim2.new(0, 10, 0, 50)}):Play()
+        end
+    end)
 
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded (compact layout + BoostFPS).")
+    print("[Tab] Visual loaded (animated layout + BoostFPS).")
     return content
 end
