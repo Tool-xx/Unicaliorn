@@ -1,6 +1,6 @@
 -- Utils/Helpers.lua
 -- Shared helper functions used across Features and Tabs
--- ESP skeleton, gradient color system, safe operations
+-- ESP box, hitbox, gradient color system, safe operations
 -- Receives Context, populates Context.Utils
 
 return function(Context)
@@ -46,11 +46,6 @@ return function(Context)
                 if data.hitbox then
                     data.hitbox.FillColor = color
                 end
-                if data.skeleton then
-                    for _, beam in ipairs(data.skeleton) do
-                        beam.Color = ColorSequence.new(color)
-                    end
-                end
             end
         end)
     end
@@ -63,8 +58,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE BOX (rectangle using 4 LineHandles or Frame approach)
-    -- Using BillboardGui with Frame corners for a clean rectangle
+    -- CREATE BOX (rectangle using BillboardGui with Frame lines)
     -- ============================================================
     local function createBoxFrame(char, color)
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -118,52 +112,6 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE SKELETON BEAMS (thicker and more visible)
-    -- ============================================================
-    function Utils.createSkeleton(char)
-        local currentColor = getGradientColor()
-        local beams = {}
-        for _, bone in ipairs(Config.SKELETON_BONES) do
-            local part0 = char:FindFirstChild(bone[1])
-            local part1 = char:FindFirstChild(bone[2])
-            if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
-                local attach0 = Instance.new("Attachment")
-                attach0.Name = "SkelA_" .. bone[1]
-                attach0.Parent = part0
-                local attach1 = Instance.new("Attachment")
-                attach1.Name = "SkelA_" .. bone[2]
-                attach1.Parent = part1
-                local beam = Instance.new("Beam")
-                beam.Name = "SkelBeam_" .. bone[1] .. "_" .. bone[2]
-                beam.Attachment0 = attach0
-                beam.Attachment1 = attach1
-                beam.Color = ColorSequence.new(currentColor)
-                beam.Width0 = 0.15
-                beam.Width1 = 0.15
-                beam.FaceCamera = true
-                beam.LightEmission = 1
-                beam.LightInfluence = 0
-                beam.Parent = char
-                table.insert(beams, beam)
-            end
-        end
-        return beams
-    end
-
-    -- ============================================================
-    -- DESTROY SKELETON BEAMS
-    -- ============================================================
-    function Utils.destroySkeleton(beams)
-        for _, beam in ipairs(beams) do
-            if beam then
-                if beam.Attachment0 then beam.Attachment0:Destroy() end
-                if beam.Attachment1 then beam.Attachment1:Destroy() end
-                beam:Destroy()
-            end
-        end
-    end
-
-    -- ============================================================
     -- REMOVE ESP FOR PLAYER
     -- ============================================================
     function Utils.removeESP(player)
@@ -171,7 +119,6 @@ return function(Context)
         if not data then return end
         if data.box then data.box:Destroy() end
         if data.hitbox then data.hitbox:Destroy() end
-        if data.skeleton then Utils.destroySkeleton(data.skeleton) end
         FeatureState.espHighlights[player] = nil
     end
 
@@ -185,7 +132,7 @@ return function(Context)
         if not char then return end
 
         local currentColor = getGradientColor()
-        local box, hitbox, skeleton
+        local box, hitbox
 
         if FeatureState.espBoxEnabled then
             box = createBoxFrame(char, currentColor)
@@ -201,11 +148,7 @@ return function(Context)
             hitbox.Parent = char
         end
 
-        if FeatureState.espSkeletonEnabled then
-            skeleton = Utils.createSkeleton(char)
-        end
-
-        FeatureState.espHighlights[player] = {box = box, hitbox = hitbox, skeleton = skeleton}
+        FeatureState.espHighlights[player] = {box = box, hitbox = hitbox}
     end
 
     -- ============================================================
@@ -226,19 +169,6 @@ return function(Context)
     -- ============================================================
     function Utils.setHitboxEnabled(enabled)
         FeatureState.espHitboxEnabled = enabled
-        if FeatureState.espEnabled then
-            for _, player in ipairs(Context.Services.Players:GetPlayers()) do
-                Utils.removeESP(player)
-                Utils.createESP(player)
-            end
-        end
-    end
-
-    -- ============================================================
-    -- SET SKELETON ENABLED
-    -- ============================================================
-    function Utils.setSkeletonEnabled(enabled)
-        FeatureState.espSkeletonEnabled = enabled
         if FeatureState.espEnabled then
             for _, player in ipairs(Context.Services.Players:GetPlayers()) do
                 Utils.removeESP(player)
