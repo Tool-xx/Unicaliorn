@@ -1,6 +1,6 @@
 -- Tabs/Visual.lua
 -- Visual tab: ESP toggle + simple toggles for Box, Hitbox, Skeleton
--- All ESP uses dynamic black-white gradient (no color selection)
+-- All ESP uses dynamic neon green gradient (no color selection)
 -- Receives Context, returns tab content frame
 
 return function(Context)
@@ -177,7 +177,7 @@ return function(Context)
             end
         end
     end)
-    if FeatureState.espHitboxEnabled then
+    if FeatureState.espSkeletonEnabled then
         skeletonToggle.setEnabled(true)
     end
     yOffset = yOffset + 40
@@ -192,8 +192,8 @@ return function(Context)
     gradientLabel.Size = UDim2.new(1, -20, 0, 20)
     gradientLabel.Position = UDim2.new(0, 10, 0, 210)
     gradientLabel.BackgroundTransparency = 1
-    gradientLabel.Text = "ESP uses dynamic black-white gradient"
-    gradientLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    gradientLabel.Text = "ESP uses dynamic neon green glow"
+    gradientLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
     gradientLabel.TextSize = 11
     gradientLabel.Font = Enum.Font.Gotham
     gradientLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -202,6 +202,6 @@ return function(Context)
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded (gradient ESP, no color picker).")
+    print("[Tab] Visual loaded (neon green ESP, no color picker).")
     return content
 end
