@@ -68,10 +68,8 @@ return {
     -- Dynamic oscillation between two bright green shades
     -- ============================================================
     ESP = {
-        -- Bright neon green shades
-        GradientColor1  = Color3.fromRGB(0, 255, 128),   -- Bright mint green
-        GradientColor2  = Color3.fromRGB(0, 255, 64),    -- Bright lime green
-        -- Cycle speed: seconds per full oscillation
+        GradientColor1  = Color3.fromRGB(0, 255, 128),
+        GradientColor2  = Color3.fromRGB(0, 255, 64),
         GradientSpeed   = 2,
     },
 
