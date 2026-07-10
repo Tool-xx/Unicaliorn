@@ -1,10 +1,12 @@
 -- Tabs/Visual.lua
--- Visual tab: ESP toggle + toggles for Box, Hitbox, Health, Name, Distance
+-- Visual tab: ESP toggle + toggles for Box, Hitbox, Health, Name, Distance, BoostFPS
 -- All ESP uses dynamic neon green gradient (no color selection)
 -- Receives Context, returns tab content frame
 
 return function(Context)
     local TweenService = Context.Services.TweenService
+    local RunService = Context.Services.RunService
+    local Lighting = game:GetService("Lighting")
     local Config = Context.Config
     local COLORS = Config.COLORS
     local TWEEN = Config.TWEEN
@@ -21,7 +23,7 @@ return function(Context)
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 340)
+    content.CanvasSize = UDim2.new(0, 0, 0, 380)
     content.Visible = false
     content.Parent = Context.UI.ContentFrame
 
@@ -215,9 +217,180 @@ return function(Context)
     targetHeight = yOffset + 10
     settingsFrame.Size = UDim2.new(1, -20, 0, 0)
 
+    -- ============================================================
+    -- BOOST FPS SECTION
+    -- ============================================================
+    local boostSep = Instance.new("Frame")
+    boostSep.Size = UDim2.new(1, -20, 0, 1)
+    boostSep.Position = UDim2.new(0, 10, 0, 260)
+    boostSep.BackgroundColor3 = COLORS.Border
+    boostSep.BorderSizePixel = 0
+    boostSep.Parent = content
+
+    local boostLabel = Instance.new("TextLabel")
+    boostLabel.Size = UDim2.new(1, -20, 0, 20)
+    boostLabel.Position = UDim2.new(0, 10, 0, 270)
+    boostLabel.BackgroundTransparency = 1
+    boostLabel.Text = "Performance"
+    boostLabel.TextColor3 = COLORS.Text
+    boostLabel.TextSize = 14
+    boostLabel.Font = Enum.Font.GothamBold
+    boostLabel.TextXAlignment = Enum.TextXAlignment.Left
+    boostLabel.Parent = content
+
+    -- Store original values for restore
+    local originalSettings = {}
+    local boostActive = false
+    local boostConnection = nil
+
+    local function saveOriginalSettings()
+        originalSettings = {
+            waterWaveSize = workspace.Terrain.WaterWaveSize,
+            waterWaveSpeed = workspace.Terrain.WaterWaveSpeed,
+            waterReflectance = workspace.Terrain.WaterReflectance,
+            waterTransparency = workspace.Terrain.WaterTransparency,
+            globalShadows = Lighting.GlobalShadows,
+            fogEnd = Lighting.FogEnd,
+            fogStart = Lighting.FogStart,
+            qualityLevel = settings().Rendering.QualityLevel,
+            parts = {},
+            decals = {},
+            emitters = {},
+            postEffects = {},
+        }
+    end
+
+    local function applyBoostFPS()
+        if boostActive then return end
+        boostActive = true
+        print("[BoostFPS] Enabled")
+
+        saveOriginalSettings()
+
+        local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
+        if Terrain then
+            Terrain.WaterWaveSize = 0
+            Terrain.WaterWaveSpeed = 0
+            Terrain.WaterReflectance = 0
+            Terrain.WaterTransparency = 1
+        end
+
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        Lighting.FogStart = 9e9
+
+        pcall(function()
+            settings().Rendering.QualityLevel = 1
+        end)
+
+        for _, v in pairs(game:GetDescendants()) do
+            if v:IsA("BasePart") then
+                originalSettings.parts[v] = {
+                    castShadow = v.CastShadow,
+                    material = v.Material,
+                    reflectance = v.Reflectance,
+                }
+                v.CastShadow = false
+                v.Material = Enum.Material.Plastic
+                v.Reflectance = 0
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                originalSettings.decals[v] = v.Transparency
+                v.Transparency = 1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                originalSettings.emitters[v] = v.Lifetime
+                v.Lifetime = NumberRange.new(0)
+            end
+        end
+
+        for _, v in pairs(Lighting:GetDescendants()) do
+            if v:IsA("PostEffect") then
+                originalSettings.postEffects[v] = v.Enabled
+                v.Enabled = false
+            end
+        end
+
+        -- Auto-destroy new effects
+        boostConnection = workspace.DescendantAdded:Connect(function(child)
+            task.spawn(function()
+                if child:IsA("ForceField") or child:IsA("Sparkles") or child:IsA("Smoke") or child:IsA("Fire") or child:IsA("Beam") then
+                    RunService.Heartbeat:Wait()
+                    if boostActive then
+                        child:Destroy()
+                    end
+                elseif child:IsA("BasePart") then
+                    child.CastShadow = false
+                end
+            end)
+        end)
+    end
+
+    local function restoreFPS()
+        if not boostActive then return end
+        boostActive = false
+        print("[BoostFPS] Disabled")
+
+        if boostConnection then
+            boostConnection:Disconnect()
+            boostConnection = nil
+        end
+
+        local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
+        if Terrain then
+            Terrain.WaterWaveSize = originalSettings.waterWaveSize or 0.15
+            Terrain.WaterWaveSpeed = originalSettings.waterWaveSpeed or 10
+            Terrain.WaterReflectance = originalSettings.waterReflectance or 1
+            Terrain.WaterTransparency = originalSettings.waterTransparency or 0.3
+        end
+
+        Lighting.GlobalShadows = originalSettings.globalShadows ~= false
+        Lighting.FogEnd = originalSettings.fogEnd or 100000
+        Lighting.FogStart = originalSettings.fogStart or 0
+
+        pcall(function()
+            settings().Rendering.QualityLevel = originalSettings.qualityLevel or 7
+        end)
+
+        for part, saved in pairs(originalSettings.parts) do
+            if part and part.Parent then
+                part.CastShadow = saved.castShadow
+                part.Material = saved.material
+                part.Reflectance = saved.reflectance
+            end
+        end
+
+        for decal, savedTransparency in pairs(originalSettings.decals) do
+            if decal and decal.Parent then
+                decal.Transparency = savedTransparency
+            end
+        end
+
+        for emitter, savedLifetime in pairs(originalSettings.emitters) do
+            if emitter and emitter.Parent then
+                emitter.Lifetime = savedLifetime
+            end
+        end
+
+        for effect, savedEnabled in pairs(originalSettings.postEffects) do
+            if effect and effect.Parent then
+                effect.Enabled = savedEnabled
+            end
+        end
+
+        originalSettings = {}
+    end
+
+    -- BoostFPS Toggle
+    local boostToggle = Components.createToggle(content, "Boost FPS", 300, function(enabled)
+        if enabled then
+            applyBoostFPS()
+        else
+            restoreFPS()
+        end
+    end)
+
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded (full ESP suite).")
+    print("[Tab] Visual loaded (full ESP suite + BoostFPS).")
     return content
 end
