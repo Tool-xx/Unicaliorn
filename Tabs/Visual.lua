@@ -1,5 +1,6 @@
 -- Tabs/Visual.lua
--- Visual tab: ESP toggle + settings with Gear icons (Box, Hitbox, Skeleton)
+-- Visual tab: ESP toggle + simple toggles for Box, Hitbox, Skeleton
+-- All ESP uses dynamic black-white gradient (no color selection)
 -- Receives Context, returns tab content frame
 
 return function(Context)
@@ -9,7 +10,6 @@ return function(Context)
     local TWEEN = Config.TWEEN
     local Components = Context.UI.Components
     local FeatureState = Context.FeatureState
-    local Utils = Context.Utils
 
     -- ============================================================
     -- CREATE CONTENT
@@ -21,12 +21,12 @@ return function(Context)
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 400)
+    content.CanvasSize = UDim2.new(0, 0, 0, 260)
     content.Visible = false
     content.Parent = Context.UI.ContentFrame
 
     -- ============================================================
-    -- ESP HEADER (toggle + settings expand)
+    -- ESP HEADER (main toggle + settings expand)
     -- ============================================================
     local espHeader = Instance.new("Frame")
     espHeader.Name = "ESPHeader"
@@ -37,7 +37,7 @@ return function(Context)
     espHeader.Parent = content
 
     local espLabel = Instance.new("TextLabel")
-    espLabel.Size = UDim2.new(1, -110, 1, 0)
+    espLabel.Size = UDim2.new(1, -60, 1, 0)
     espLabel.Position = UDim2.new(0, 5, 0, 0)
     espLabel.BackgroundTransparency = 1
     espLabel.Text = "ESP"
@@ -50,7 +50,7 @@ return function(Context)
     -- ESP Toggle BG
     local espToggleBg = Instance.new("TextButton")
     espToggleBg.Size = UDim2.new(0, 50, 0, 22)
-    espToggleBg.Position = UDim2.new(1, -105, 0.5, -11)
+    espToggleBg.Position = UDim2.new(1, -55, 0.5, -11)
     espToggleBg.BackgroundColor3 = COLORS.ToggleOff
     espToggleBg.BorderSizePixel = 1
     espToggleBg.BorderColor3 = COLORS.Border
@@ -69,7 +69,7 @@ return function(Context)
     local settingsToggleBtn = Instance.new("TextButton")
     settingsToggleBtn.Name = "SettingsToggle"
     settingsToggleBtn.Size = UDim2.new(0, 30, 0, 22)
-    settingsToggleBtn.Position = UDim2.new(1, -35, 0.5, -11)
+    settingsToggleBtn.Position = UDim2.new(1, -90, 0.5, -11)
     settingsToggleBtn.BackgroundColor3 = COLORS.Background
     settingsToggleBtn.BorderSizePixel = 1
     settingsToggleBtn.BorderColor3 = COLORS.Border
@@ -119,7 +119,7 @@ return function(Context)
     settingsFrame.Parent = content
 
     local settingsOpen = false
-    local targetHeight = 300
+    local targetHeight = 150
 
     settingsToggleBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
@@ -133,76 +133,75 @@ return function(Context)
     end)
 
     -- ============================================================
-    -- ESP SETTINGS (Box, Hitbox, Skeleton with Gear)
+    -- ESP SUB-TOGGLES (Box, Hitbox, Skeleton) - NO GEAR ICONS
     -- ============================================================
     local yOffset = 10
 
-    -- Box Toggle + Gear
-    Components.createToggleWithGear(settingsFrame, yOffset, "Box",
-        FeatureState.espBoxColor or Config.ESP.BoxColor,
-        function(enabled)
-            if Context.Features.ESP then
-                if enabled then
-                    Context.Features.ESP.EnableBox()
-                else
-                    Context.Features.ESP.DisableBox()
-                end
-            end
-        end,
-        function(color)
-            if Context.Features.ESP then
-                Context.Features.ESP.SetBoxColor3(color)
+    -- Box Toggle
+    local boxToggle = Components.createToggle(settingsFrame, "Box", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableBox()
+            else
+                Context.Features.ESP.DisableBox()
             end
         end
-    )
+    end)
+    if FeatureState.espBoxEnabled then
+        boxToggle.setEnabled(true)
+    end
     yOffset = yOffset + 40
 
-    -- Hitbox Toggle + Gear
-    Components.createToggleWithGear(settingsFrame, yOffset, "Hitbox",
-        FeatureState.espHitboxColor or Config.ESP.HitboxColor,
-        function(enabled)
-            if Context.Features.ESP then
-                if enabled then
-                    Context.Features.ESP.EnableHitbox()
-                else
-                    Context.Features.ESP.DisableHitbox()
-                end
-            end
-        end,
-        function(color)
-            if Context.Features.ESP then
-                Context.Features.ESP.SetHitboxColor3(color)
+    -- Hitbox Toggle
+    local hitboxToggle = Components.createToggle(settingsFrame, "Hitbox", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableHitbox()
+            else
+                Context.Features.ESP.DisableHitbox()
             end
         end
-    )
+    end)
+    if FeatureState.espHitboxEnabled then
+        hitboxToggle.setEnabled(true)
+    end
     yOffset = yOffset + 40
 
-    -- Skeleton Toggle + Gear
-    Components.createToggleWithGear(settingsFrame, yOffset, "Skeleton",
-        FeatureState.espSkeletonColor or Config.ESP.SkeletonColor,
-        function(enabled)
-            if Context.Features.ESP then
-                if enabled then
-                    Context.Features.ESP.EnableSkeleton()
-                else
-                    Context.Features.ESP.DisableSkeleton()
-                end
-            end
-        end,
-        function(color)
-            if Context.Features.ESP then
-                Context.Features.ESP.SetSkeletonColor3(color)
+    -- Skeleton Toggle
+    local skeletonToggle = Components.createToggle(settingsFrame, "Skeleton", yOffset, function(enabled)
+        if Context.Features.ESP then
+            if enabled then
+                Context.Features.ESP.EnableSkeleton()
+            else
+                Context.Features.ESP.DisableSkeleton()
             end
         end
-    )
+    end)
+    if FeatureState.espHitboxEnabled then
+        skeletonToggle.setEnabled(true)
+    end
     yOffset = yOffset + 40
 
     targetHeight = yOffset + 10
     settingsFrame.Size = UDim2.new(1, -20, 0, 0)
 
+    -- ============================================================
+    -- GRADIENT INFO LABEL
+    -- ============================================================
+    local gradientLabel = Instance.new("TextLabel")
+    gradientLabel.Size = UDim2.new(1, -20, 0, 20)
+    gradientLabel.Position = UDim2.new(0, 10, 0, 210)
+    gradientLabel.BackgroundTransparency = 1
+    gradientLabel.Text = "ESP uses dynamic black-white gradient"
+    gradientLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    gradientLabel.TextSize = 11
+    gradientLabel.Font = Enum.Font.Gotham
+    gradientLabel.TextXAlignment = Enum.TextXAlignment.Left
+    gradientLabel.Parent = content
+
     -- Register tab
     Context.UI.Main.registerTabContent("Visual", content)
 
-    print("[Tab] Visual loaded.")
+    print("[Tab] Visual loaded (gradient ESP, no color picker).")
     return content
 end
