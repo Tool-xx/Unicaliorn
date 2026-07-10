@@ -1,14 +1,16 @@
 -- Utils/Helpers.lua
 -- Shared helper functions used across Features and Tabs
--- ESP box, hitbox, gradient color system, safe operations
+-- ESP box, hitbox, health bar, name, distance, gradient color system
 -- Receives Context, populates Context.Utils
 
 return function(Context)
     local TweenService = Context.Services.TweenService
     local RunService = Context.Services.RunService
+    local Players = Context.Services.Players
     local Config = Context.Config
     local COLORS = Config.COLORS
     local FeatureState = Context.FeatureState
+    local LocalPlayer = Context.LocalPlayer
 
     local Utils = {}
 
@@ -34,6 +36,10 @@ return function(Context)
         return lerpColor3(c1, c2, t)
     end
 
+    function Utils.getCurrentGradientColor()
+        return getGradientColor()
+    end
+
     function Utils.startGradientCycle()
         if gradientConnection then return end
         gradientConnection = RunService.Heartbeat:Connect(function(dt)
@@ -45,6 +51,15 @@ return function(Context)
                 end
                 if data.hitbox then
                     data.hitbox.FillColor = color
+                end
+                if data.nameLabel then
+                    data.nameLabel.TextColor3 = color
+                end
+                if data.distanceLabel then
+                    data.distanceLabel.TextColor3 = color
+                end
+                if data.healthText then
+                    data.healthText.TextColor3 = color
                 end
             end
         end)
@@ -72,7 +87,6 @@ return function(Context)
         billboard.Adornee = hrp
         billboard.Parent = char
 
-        -- Top line
         local top = Instance.new("Frame")
         top.Name = "Top"
         top.Size = UDim2.new(1, 0, 0, 2)
@@ -81,7 +95,6 @@ return function(Context)
         top.BorderSizePixel = 0
         top.Parent = billboard
 
-        -- Bottom line
         local bottom = Instance.new("Frame")
         bottom.Name = "Bottom"
         bottom.Size = UDim2.new(1, 0, 0, 2)
@@ -90,7 +103,6 @@ return function(Context)
         bottom.BorderSizePixel = 0
         bottom.Parent = billboard
 
-        -- Left line
         local left = Instance.new("Frame")
         left.Name = "Left"
         left.Size = UDim2.new(0, 2, 1, 0)
@@ -99,7 +111,6 @@ return function(Context)
         left.BorderSizePixel = 0
         left.Parent = billboard
 
-        -- Right line
         local right = Instance.new("Frame")
         right.Name = "Right"
         right.Size = UDim2.new(0, 2, 1, 0)
@@ -112,6 +123,151 @@ return function(Context)
     end
 
     -- ============================================================
+    -- CREATE HEALTH BAR (left side of character)
+    -- ============================================================
+    local function createHealthBar(char)
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then return nil, nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESPHealth"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 50, 0, 120)
+        billboard.StudsOffset = Vector3.new(-3.5, 0, 0) -- Left side, away from box
+        billboard.Adornee = hrp
+        billboard.Parent = char
+
+        -- Background (red - missing health)
+        local bg = Instance.new("Frame")
+        bg.Name = "Background"
+        bg.Size = UDim2.new(0, 6, 1, 0)
+        bg.Position = UDim2.new(0, 0, 0, 0)
+        bg.BackgroundColor3 = COLORS.HealthRed
+        bg.BorderSizePixel = 1
+        bg.BorderColor3 = Color3.fromRGB(0, 0, 0)
+        bg.Parent = billboard
+
+        -- Fill (green - current health)
+        local fill = Instance.new("Frame")
+        fill.Name = "Fill"
+        fill.Size = UDim2.new(0, 6, 1, 0)
+        fill.Position = UDim2.new(0, 0, 0, 0)
+        fill.BackgroundColor3 = COLORS.HealthGreen
+        fill.BorderSizePixel = 0
+        fill.Parent = billboard
+
+        -- Health text
+        local healthText = Instance.new("TextLabel")
+        healthText.Name = "HealthText"
+        healthText.Size = UDim2.new(0, 50, 0, 14)
+        healthText.Position = UDim2.new(0, -22, 0, -16)
+        healthText.BackgroundTransparency = 1
+        healthText.Text = tostring(math.floor(hum.Health))
+        healthText.TextColor3 = getGradientColor()
+        healthText.TextSize = 11
+        healthText.Font = Enum.Font.GothamBold
+        healthText.TextStrokeTransparency = 0
+        healthText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        healthText.Parent = billboard
+
+        return billboard, healthText
+    end
+
+    -- ============================================================
+    -- CREATE NAME LABEL (above head)
+    -- ============================================================
+    local function createNameLabel(char, playerName)
+        local head = char:FindFirstChild("Head")
+        if not head then return nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESPName"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 200, 0, 30)
+        billboard.StudsOffset = Vector3.new(0, 2.8, 0) -- Above head, above box
+        billboard.Adornee = head
+        billboard.Parent = char
+
+        local label = Instance.new("TextLabel")
+        label.Name = "NameLabel"
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = playerName
+        label.TextColor3 = getGradientColor()
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamBold
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.Parent = billboard
+
+        return billboard, label
+    end
+
+    -- ============================================================
+    -- CREATE DISTANCE LABEL (below name)
+    -- ============================================================
+    local function createDistanceLabel(char)
+        local head = char:FindFirstChild("Head")
+        if not head then return nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESPDistance"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 200, 0, 20)
+        billboard.StudsOffset = Vector3.new(0, 1.5, 0) -- Below name, above box
+        billboard.Adornee = head
+        billboard.Parent = char
+
+        local label = Instance.new("TextLabel")
+        label.Name = "DistanceLabel"
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = "0m"
+        label.TextColor3 = getGradientColor()
+        label.TextSize = 12
+        label.Font = Enum.Font.GothamBold
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.Parent = billboard
+
+        return billboard, label
+    end
+
+    -- ============================================================
+    -- UPDATE HEALTH BAR
+    -- ============================================================
+    local function updateHealthBar(data, hum)
+        if not data or not data.healthBar or not hum then return end
+        local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+        local fill = data.healthBar:FindFirstChild("Fill", true)
+        if fill then
+            fill.Size = UDim2.new(0, 6, healthPercent, 0)
+            fill.Position = UDim2.new(0, 0, 1 - healthPercent, 0)
+        end
+        if data.healthText then
+            data.healthText.Text = tostring(math.floor(hum.Health))
+        end
+    end
+
+    -- ============================================================
+    -- UPDATE DISTANCE
+    -- ============================================================
+    local function updateDistance(data, player)
+        if not data or not data.distanceLabel then return end
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local theirChar = player.Character
+        local theirRoot = theirChar and theirChar:FindFirstChild("HumanoidRootPart")
+        if myRoot and theirRoot then
+            local dist = (myRoot.Position - theirRoot.Position).Magnitude
+            data.distanceLabel.Text = string.format("%.0fm", dist)
+        else
+            data.distanceLabel.Text = "?"
+        end
+    end
+
+    -- ============================================================
     -- REMOVE ESP FOR PLAYER
     -- ============================================================
     function Utils.removeESP(player)
@@ -119,6 +275,15 @@ return function(Context)
         if not data then return end
         if data.box then data.box:Destroy() end
         if data.hitbox then data.hitbox:Destroy() end
+        if data.healthBar then data.healthBar:Destroy() end
+        if data.nameLabel then
+            local parent = data.nameLabel.Parent
+            if parent then parent:Destroy() end
+        end
+        if data.distanceLabel then
+            local parent = data.distanceLabel.Parent
+            if parent then parent:Destroy() end
+        end
         FeatureState.espHighlights[player] = nil
     end
 
@@ -132,7 +297,7 @@ return function(Context)
         if not char then return end
 
         local currentColor = getGradientColor()
-        local box, hitbox
+        local box, hitbox, healthBar, healthText, nameBillboard, nameLabel, distBillboard, distanceLabel
 
         if FeatureState.espBoxEnabled then
             box = createBoxFrame(char, currentColor)
@@ -148,16 +313,64 @@ return function(Context)
             hitbox.Parent = char
         end
 
-        FeatureState.espHighlights[player] = {box = box, hitbox = hitbox}
+        if FeatureState.espHealthEnabled then
+            healthBar, healthText = createHealthBar(char)
+        end
+
+        if FeatureState.espNameEnabled then
+            nameBillboard, nameLabel = createNameLabel(char, player.Name)
+        end
+
+        if FeatureState.espDistanceEnabled then
+            distBillboard, distanceLabel = createDistanceLabel(char)
+        end
+
+        FeatureState.espHighlights[player] = {
+            box = box,
+            hitbox = hitbox,
+            healthBar = healthBar,
+            healthText = healthText,
+            nameLabel = nameLabel,
+            distanceLabel = distanceLabel,
+        }
     end
 
     -- ============================================================
-    -- SET BOX ENABLED (recreate ESP for all)
+    -- UPDATE LOOP (health bars + distances)
+    -- ============================================================
+    local updateConnection = nil
+    local function startUpdateLoop()
+        if updateConnection then return end
+        updateConnection = RunService.Heartbeat:Connect(function()
+            if not FeatureState.espEnabled then return end
+            for player, data in pairs(FeatureState.espHighlights) do
+                if player and player.Character then
+                    local hum = player.Character:FindFirstChildOfClass("Humanoid")
+                    if FeatureState.espHealthEnabled then
+                        updateHealthBar(data, hum)
+                    end
+                    if FeatureState.espDistanceEnabled then
+                        updateDistance(data, player)
+                    end
+                end
+            end
+        end)
+    end
+
+    local function stopUpdateLoop()
+        if updateConnection then
+            updateConnection:Disconnect()
+            updateConnection = nil
+        end
+    end
+
+    -- ============================================================
+    -- SET BOX ENABLED
     -- ============================================================
     function Utils.setBoxEnabled(enabled)
         FeatureState.espBoxEnabled = enabled
         if FeatureState.espEnabled then
-            for _, player in ipairs(Context.Services.Players:GetPlayers()) do
+            for _, player in ipairs(Players:GetPlayers()) do
                 Utils.removeESP(player)
                 Utils.createESP(player)
             end
@@ -170,7 +383,46 @@ return function(Context)
     function Utils.setHitboxEnabled(enabled)
         FeatureState.espHitboxEnabled = enabled
         if FeatureState.espEnabled then
-            for _, player in ipairs(Context.Services.Players:GetPlayers()) do
+            for _, player in ipairs(Players:GetPlayers()) do
+                Utils.removeESP(player)
+                Utils.createESP(player)
+            end
+        end
+    end
+
+    -- ============================================================
+    -- SET HEALTH ESP ENABLED
+    -- ============================================================
+    function Utils.setHealthEnabled(enabled)
+        FeatureState.espHealthEnabled = enabled
+        if FeatureState.espEnabled then
+            for _, player in ipairs(Players:GetPlayers()) do
+                Utils.removeESP(player)
+                Utils.createESP(player)
+            end
+        end
+    end
+
+    -- ============================================================
+    -- SET NAME ESP ENABLED
+    -- ============================================================
+    function Utils.setNameEnabled(enabled)
+        FeatureState.espNameEnabled = enabled
+        if FeatureState.espEnabled then
+            for _, player in ipairs(Players:GetPlayers()) do
+                Utils.removeESP(player)
+                Utils.createESP(player)
+            end
+        end
+    end
+
+    -- ============================================================
+    -- SET DISTANCE ESP ENABLED
+    -- ============================================================
+    function Utils.setDistanceEnabled(enabled)
+        FeatureState.espDistanceEnabled = enabled
+        if FeatureState.espEnabled then
+            for _, player in ipairs(Players:GetPlayers()) do
                 Utils.removeESP(player)
                 Utils.createESP(player)
             end
@@ -186,8 +438,9 @@ return function(Context)
         print("[ESP] Enabled")
 
         Utils.startGradientCycle()
+        startUpdateLoop()
 
-        for _, player in ipairs(Context.Services.Players:GetPlayers()) do
+        for _, player in ipairs(Players:GetPlayers()) do
             Utils.createESP(player)
             if not FeatureState.espCharacterAddedConns[player] then
                 FeatureState.espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
@@ -199,7 +452,7 @@ return function(Context)
         end
 
         if not FeatureState.espPlayerAddedConn then
-            FeatureState.espPlayerAddedConn = Context.Services.Players.PlayerAdded:Connect(function(player)
+            FeatureState.espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
                 if FeatureState.espEnabled then
                     Utils.createESP(player)
                     if not FeatureState.espCharacterAddedConns[player] then
@@ -223,6 +476,7 @@ return function(Context)
         print("[ESP] Disabled")
 
         Utils.stopGradientCycle()
+        stopUpdateLoop()
 
         if FeatureState.espPlayerAddedConn then
             FeatureState.espPlayerAddedConn:Disconnect()
@@ -248,5 +502,5 @@ return function(Context)
 
     -- Register in Context
     Context.Utils = Utils
-    print("[Helpers] Utils registered with neon green gradient ESP.")
+    print("[Helpers] Utils registered with full ESP suite.")
 end
