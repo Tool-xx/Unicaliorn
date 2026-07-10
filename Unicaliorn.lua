@@ -1,164 +1,218 @@
--- Unicaliorn.lua - Main Entry Point
--- Loads all modules, initializes GUI, features, and starts the script.
+-- Unicaliorn Script
+-- Universal GUI Script with Modular Architecture
+-- Entry point: loads all modules via GitHub raw URLs
 
-if _G.UnicaliornLoaded then
-    return
-end
+if _G.UnicaliornLoaded then return end
 _G.UnicaliornLoaded = true
 
+local SCRIPT_START_TIME = os.time()
+print("[Unicaliorn] Initializing modular system...")
+
+-- ============================================================
+-- CONFIGURATION: Update this with your actual GitHub raw URL
+-- ============================================================
 local BASE_URL = "https://raw.githubusercontent.com/Tool-xx/Unicaliorn/main/"
 
--- Simple HTTP GET with error handling
-local function httpGet(url)
+-- Helper to load a module from GitHub
+local function loadModule(path)
+    local url = BASE_URL .. path
     local success, result = pcall(function()
-        return game:HttpGet(url)
+        return game:HttpGet(url, true)
     end)
     if not success then
-        warn("[Unicaliorn] Failed to fetch: " .. url .. " - " .. tostring(result))
+        warn("[Unicaliorn] Failed to fetch: " .. url .. " | Error: " .. tostring(result))
         return nil
     end
-    return result
-end
-
--- Load and execute a Lua module from URL, returning its result
-local function loadModule(moduleName)
-    local url = BASE_URL .. moduleName .. ".lua"
-    local source = httpGet(url)
-    if not source then
-        return nil
-    end
-
-    local success, result = pcall(function()
-        return loadstring(source)()
+    local loadSuccess, loaded = pcall(function()
+        return loadstring(result)
     end)
-    if not success then
-        warn("[Unicaliorn] Failed to load module " .. moduleName .. ": " .. tostring(result))
+    if not loadSuccess then
+        warn("[Unicaliorn] Failed to parse: " .. path .. " | Error: " .. tostring(loaded))
         return nil
     end
-    return result
+    local execSuccess, module = pcall(loaded)
+    if not execSuccess then
+        warn("[Unicaliorn] Failed to execute: " .. path .. " | Error: " .. tostring(module))
+        return nil
+    end
+    print("[Unicaliorn] Loaded: " .. path)
+    return module
 end
 
-print("[Unicaliorn] Loading modules...")
-
--- 1. Config (pure data)
-local Config = loadModule("Config")
+-- ============================================================
+-- STEP 1: Load Config (colors, tween presets, constants)
+-- ============================================================
+local Config = loadModule("Config.lua")
 if not Config then
-    error("Config module failed to load")
+    warn("[Unicaliorn] CRITICAL: Config.lua failed to load. Aborting.")
+    return
 end
 
--- 2. UI Components (depends on Config)
-local Components = loadModule("UI/Components")
-if not Components then
-    error("UI Components module failed to load")
+-- ============================================================
+-- STEP 2: Load Core Context (services, shared state)
+-- ============================================================
+local Context = loadModule("Core/Context.lua")
+if not Context then
+    warn("[Unicaliorn] CRITICAL: Core/Context.lua failed to load. Aborting.")
+    return
 end
 
--- Initialize Components with Config if needed (assuming Components.init exists)
-if Components.init then
-    Components.init(Config)
+-- Inject Config and script start time into Context
+Context.Config = Config
+Context.SCRIPT_START_TIME = SCRIPT_START_TIME
+
+-- ============================================================
+-- STEP 3: Load UI Components (needed by Tabs and Windows)
+-- ============================================================
+Context.UI = {}
+
+Context.UI.Components = loadModule("UI/Components.lua")
+if Context.UI.Components then
+    Context.UI.Components(Context)
+else
+    warn("[Unicaliorn] WARNING: UI/Components.lua failed to load.")
 end
 
--- 3. UI (depends on Config, Components)
-local UI = loadModule("UI/UI")
-if not UI then
-    error("UI module failed to load")
+Context.UI.WindowManager = loadModule("UI/WindowManager.lua")
+if Context.UI.WindowManager then
+    Context.UI.WindowManager(Context)
+else
+    warn("[Unicaliorn] WARNING: UI/WindowManager.lua failed to load.")
 end
 
--- Initialize UI
-if UI.init then
-    UI.init(Config, Components)
+-- ============================================================
+-- STEP 4: Load Main GUI (creates ScreenGui, MainFrame, etc.)
+-- ============================================================
+Context.UI.Main = loadModule("UI/MainGUI.lua")
+if Context.UI.Main then
+    Context.UI.Main(Context)
+else
+    warn("[Unicaliorn] CRITICAL: UI/MainGUI.lua failed to load. Aborting.")
+    return
 end
 
--- 4. Features (each is a constructor function)
-local FeatureConstructors = {
-    ESP = loadModule("Features/ESP"),
-    Spectate = loadModule("Features/Spectate"),
-    Mark = loadModule("Features/Mark"),
-    AntiAFK = loadModule("Features/AntiAFK"),
-    FPSPing = loadModule("Features/FPSPing"),
-    Noclip = loadModule("Features/Noclip"),
-    Speedhack = loadModule("Features/Speedhack"),
-    Fly = loadModule("Features/Fly"),
-    InfinityJump = loadModule("Features/InfinityJump"),
+-- ============================================================
+-- STEP 5: Load Utils (shared helpers)
+-- ============================================================
+Context.Utils = loadModule("Utils/Helpers.lua")
+if Context.Utils then
+    Context.Utils(Context)
+else
+    warn("[Unicaliorn] WARNING: Utils/Helpers.lua failed to load.")
+end
+
+-- ============================================================
+-- STEP 6: Load Features (ESP, Fly, Noclip, etc.)
+-- ============================================================
+Context.Features = {}
+
+local featureFiles = {
+    "ESP",
+    "Spectate",
+    "Mark",
+    "AntiAFK",
+    "FPSPing",
+    "Noclip",
+    "Speedhack",
+    "Fly",
+    "InfinityJump"
 }
 
--- Create instances of features, passing Config and a services table if needed
-local services = {
-    Players = game:GetService("Players"),
-    UserInputService = game:GetService("UserInputService"),
-    RunService = game:GetService("RunService"),
-    TweenService = game:GetService("TweenService"),
-    MarketplaceService = game:GetService("MarketplaceService"),
-    TeleportService = game:GetService("TeleportService"),
-    StarterGui = game:GetService("StarterGui"),
-    HttpService = game:GetService("HttpService"),
-}
-
-local features = {}
-for name, ctor in pairs(FeatureConstructors) do
-    if ctor then
-        local instance = ctor(Config, services) -- or ctor(Config, services, UI)
-        if instance then
-            features[name] = instance
-            print("[Unicaliorn] Feature loaded: " .. name)
+for _, name in ipairs(featureFiles) do
+    local module = loadModule("Features/" .. name .. ".lua")
+    if module then
+        local success, feature = pcall(function() return module(Context) end)
+        if success then
+            Context.Features[name] = feature
+            print("[Unicaliorn] Feature registered: " .. name)
         else
-            warn("[Unicaliorn] Feature constructor returned nil: " .. name)
+            warn("[Unicaliorn] Feature init failed: " .. name .. " | " .. tostring(feature))
         end
     else
-        warn("[Unicaliorn] Feature module not found: " .. name)
+        warn("[Unicaliorn] Feature load failed: " .. name)
     end
 end
 
--- 5. Windows (UI windows)
-local ServerInfo = loadModule("UI/Windows/ServerInfo")
-local PlayerProfile = loadModule("UI/Windows/PlayerProfile")
+-- ============================================================
+-- STEP 7: Load Windows (ServerInfo, PlayerProfile)
+-- ============================================================
+Context.Windows = {}
 
--- 6. Tabs (content factories)
-local TabConstructors = {
-    General = loadModule("Tabs/General"),
-    Players = loadModule("Tabs/Players"),
-    Misc = loadModule("Tabs/Misc"),
-    Movement = loadModule("Tabs/Movement"),
-    Visual = loadModule("Tabs/Visual"),
+local windowFiles = {
+    "ServerInfo",
+    "PlayerProfile"
 }
 
-local tabs = {}
-for name, ctor in pairs(TabConstructors) do
-    if ctor then
-        -- Each tab factory receives Config, UI, Components, features, windows, etc.
-        local contentFrame = ctor(Config, UI, Components, features, {ServerInfo = ServerInfo, PlayerProfile = PlayerProfile})
-        if contentFrame then
-            tabs[name] = contentFrame
-            UI.registerTab(name, contentFrame)
+for _, name in ipairs(windowFiles) do
+    local module = loadModule("Windows/" .. name .. ".lua")
+    if module then
+        local success, window = pcall(function() return module(Context) end)
+        if success then
+            Context.Windows[name] = window
+            print("[Unicaliorn] Window registered: " .. name)
+        else
+            warn("[Unicaliorn] Window init failed: " .. name .. " | " .. tostring(window))
+        end
+    else
+        warn("[Unicaliorn] Window load failed: " .. name)
+    end
+end
+
+-- ============================================================
+-- STEP 8: Load Tabs (General, Players, Misc, Movement, Visual)
+-- ============================================================
+local Tabs = {}
+
+local tabFiles = {
+    "General",
+    "Players",
+    "Misc",
+    "Movement",
+    "Visual"
+}
+
+for _, name in ipairs(tabFiles) do
+    local module = loadModule("Tabs/" .. name .. ".lua")
+    if module then
+        local success, tab = pcall(function() return module(Context) end)
+        if success then
+            Tabs[name] = tab
             print("[Unicaliorn] Tab registered: " .. name)
         else
-            warn("[Unicaliorn] Tab factory returned nil: " .. name)
+            warn("[Unicaliorn] Tab init failed: " .. name .. " | " .. tostring(tab))
         end
     else
-        warn("[Unicaliorn] Tab module not found: " .. name)
+        warn("[Unicaliorn] Tab load failed: " .. name)
     end
 end
 
--- 7. FeatureManager (optional, can integrate here or let tabs handle features directly)
-local FeatureManager = loadModule("FeatureManager")
-if FeatureManager then
-    if FeatureManager.init then
-        FeatureManager.init(Config, UI, features, tabs)
-    end
-end
-
--- 8. Show UI with animation
-UI:show()
-
--- 9. Cleanup on UI close
-UI:onClose(function()
-    print("[Unicaliorn] Shutting down...")
-    -- Disable all active features
-    for name, feature in pairs(features) do
-        if feature.isEnabled and feature.isEnabled() then
-            pcall(feature.disable, feature)
+-- ============================================================
+-- STEP 9: Wire up Tab Switching & Activate First Tab
+-- ============================================================
+if Context.UI.Main and Context.UI.Main.setActiveTab then
+    -- Wire sidebar buttons to tab switching
+    if Context.UI.Main.sidebarButtons then
+        for _, button in ipairs(Context.UI.Main.sidebarButtons) do
+            button.MouseButton1Click:Connect(function()
+                Context.UI.Main.setActiveTab(button.Name)
+            end)
         end
     end
-    _G.UnicaliornLoaded = nil
-end)
 
-print("[Unicaliorn] Loaded successfully!")
+    -- Activate first tab
+    task.defer(function()
+        Context.UI.Main.setActiveTab("General")
+    end)
+end
+
+-- ============================================================
+-- STEP 10: Animate Appearance
+-- ============================================================
+if Context.UI.Main and Context.UI.Main.animateAppearance then
+    Context.UI.Main.animateAppearance()
+end
+
+print("[Unicaliorn] Loaded successfully! Modules: " .. 
+    tostring(#featureFiles) .. " features, " .. 
+    tostring(#windowFiles) .. " windows, " .. 
+    tostring(#tabFiles) .. " tabs.")
