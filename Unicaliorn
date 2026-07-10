@@ -102,6 +102,188 @@ local espHighlights = {}
 local espPlayerAddedConn = nil
 local espCharacterAddedConns = {}
 
+-- Функции ESP
+local function createSkeleton(char, color)
+    local bones = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"}
+    }
+    local beams = {}
+    for _, bone in ipairs(bones) do
+        local part0 = char:FindFirstChild(bone[1])
+        local part1 = char:FindFirstChild(bone[2])
+        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
+            local attach0 = Instance.new("Attachment", part0)
+            local attach1 = Instance.new("Attachment", part1)
+            local beam = Instance.new("Beam")
+            beam.Attachment0 = attach0
+            beam.Attachment1 = attach1
+            beam.Color = ColorSequence.new(color)
+            beam.Width0 = 0.05
+            beam.Width1 = 0.05
+            beam.Parent = char
+            table.insert(beams, beam)
+        end
+    end
+    return beams
+end
+
+local function destroySkeleton(beams)
+    for _, beam in ipairs(beams) do
+        if beam then
+            if beam.Attachment0 then beam.Attachment0:Destroy() end
+            if beam.Attachment1 then beam.Attachment1:Destroy() end
+            beam:Destroy()
+        end
+    end
+end
+
+local function removeESP(player)
+    local data = espHighlights[player]
+    if not data then return end
+    if data.box then data.box:Destroy() end
+    if data.hitbox then data.hitbox:Destroy() end
+    if data.skeleton then destroySkeleton(data.skeleton) end
+    espHighlights[player] = nil
+end
+
+local function createESP(player)
+    removeESP(player)
+    if not espEnabled then return end
+    local char = player.Character
+    if not char then return end
+    local box, hitbox, skeleton
+    if espBoxEnabled then
+        box = Instance.new("Highlight")
+        box.Adornee = char
+        box.FillTransparency = 1
+        box.OutlineTransparency = 0
+        box.FillColor = espBoxColor
+        box.OutlineColor = espBoxColor
+        box.Parent = char
+    end
+    if espHitboxEnabled then
+        hitbox = Instance.new("Highlight")
+        hitbox.Adornee = char
+        hitbox.FillTransparency = 0.3
+        hitbox.OutlineTransparency = 1
+        hitbox.FillColor = espHitboxColor
+        hitbox.Parent = char
+    end
+    if espSkeletonEnabled then
+        skeleton = createSkeleton(char, espSkeletonColor)
+    end
+    espHighlights[player] = {box=box, hitbox=hitbox, skeleton=skeleton}
+end
+
+local function updateAllBoxColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.box then data.box.FillColor = color; data.box.OutlineColor = color end
+    end
+end
+local function updateAllHitboxColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.hitbox then data.hitbox.FillColor = color end
+    end
+end
+local function updateAllSkeletonColor(color)
+    for _, data in pairs(espHighlights) do
+        if data.skeleton then
+            for _, beam in ipairs(data.skeleton) do
+                beam.Color = ColorSequence.new(color)
+            end
+        end
+    end
+end
+
+local function enableESP()
+    if espEnabled then return end
+    espEnabled = true
+    print("[ESP] Enabled")
+    for _, player in ipairs(Players:GetPlayers()) do
+        createESP(player)
+        if not espCharacterAddedConns[player] then
+            espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                if espEnabled then createESP(player) end
+            end)
+        end
+    end
+    if not espPlayerAddedConn then
+        espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
+            if espEnabled then
+                createESP(player)
+                if not espCharacterAddedConns[player] then
+                    espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
+                        if espEnabled then createESP(player) end
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+local function disableESP()
+    if not espEnabled then return end
+    espEnabled = false
+    print("[ESP] Disabled")
+    if espPlayerAddedConn then espPlayerAddedConn:Disconnect() espPlayerAddedConn = nil end
+    for _, conn in pairs(espCharacterAddedConns) do conn:Disconnect() end
+    espCharacterAddedConns = {}
+    for player in pairs(espHighlights) do removeESP(player) end
+end
+
+local function setBoxEnabled(enabled)
+    espBoxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+local function setHitboxEnabled(enabled)
+    espHitboxEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+local function setSkeletonEnabled(enabled)
+    espSkeletonEnabled = enabled
+    if espEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            removeESP(player)
+            createESP(player)
+        end
+    end
+end
+local function setBoxColor(r, g, b)
+    espBoxColor = Color3.fromRGB(r, g, b)
+    updateAllBoxColor(espBoxColor)
+end
+local function setHitboxColor(r, g, b)
+    espHitboxColor = Color3.fromRGB(r, g, b)
+    updateAllHitboxColor(espHitboxColor)
+end
+local function setSkeletonColor(r, g, b)
+    espSkeletonColor = Color3.fromRGB(r, g, b)
+    updateAllSkeletonColor(espSkeletonColor)
+end
+
 -- ===== UI СОЗДАНИЕ =====
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -453,6 +635,7 @@ local function setupWindowDrag(window, dragElement)
         end
     end
 end
+
 -- ===== SERVER INFO =====
 local function createServerInfoWindow()
     print("[ServerInfo] Opened")
@@ -1057,6 +1240,7 @@ local function destroyPingWindow()
         print("[Ping] Window destroyed")
     end
 end
+
 -- ===== NOCLIP =====
 local function enableNoclip()
     if noclipEnabled then return end
@@ -1293,199 +1477,6 @@ local function disableInfinityJump()
         infinityJumpConnection:Disconnect()
         infinityJumpConnection = nil
     end
-end
--- ===== VISUAL / ESP =====
-local function createSkeleton(char, color)
-    local bones = {
-        {"Head", "UpperTorso"},
-        {"UpperTorso", "LowerTorso"},
-        {"UpperTorso", "LeftUpperArm"},
-        {"LeftUpperArm", "LeftLowerArm"},
-        {"LeftLowerArm", "LeftHand"},
-        {"UpperTorso", "RightUpperArm"},
-        {"RightUpperArm", "RightLowerArm"},
-        {"RightLowerArm", "RightHand"},
-        {"LowerTorso", "LeftUpperLeg"},
-        {"LeftUpperLeg", "LeftLowerLeg"},
-        {"LeftLowerLeg", "LeftFoot"},
-        {"LowerTorso", "RightUpperLeg"},
-        {"RightUpperLeg", "RightLowerLeg"},
-        {"RightLowerLeg", "RightFoot"}
-    }
-    local beams = {}
-    for _, bone in ipairs(bones) do
-        local part0 = char:FindFirstChild(bone[1])
-        local part1 = char:FindFirstChild(bone[2])
-        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
-            local attach0 = Instance.new("Attachment", part0)
-            local attach1 = Instance.new("Attachment", part1)
-            local beam = Instance.new("Beam")
-            beam.Attachment0 = attach0
-            beam.Attachment1 = attach1
-            beam.Color = ColorSequence.new(color)
-            beam.Width0 = 0.05
-            beam.Width1 = 0.05
-            beam.Parent = char
-            table.insert(beams, beam)
-        end
-    end
-    return beams
-end
-
-local function destroySkeleton(beams)
-    for _, beam in ipairs(beams) do
-        if beam then
-            if beam.Attachment0 then beam.Attachment0:Destroy() end
-            if beam.Attachment1 then beam.Attachment1:Destroy() end
-            beam:Destroy()
-        end
-    end
-end
-
-local function removeESP(player)
-    local data = espHighlights[player]
-    if not data then return end
-    if data.box then data.box:Destroy() end
-    if data.hitbox then data.hitbox:Destroy() end
-    if data.skeleton then destroySkeleton(data.skeleton) end
-    espHighlights[player] = nil
-end
-
-local function createESP(player)
-    removeESP(player)
-    if not espEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local box, hitbox, skeleton
-    if espBoxEnabled then
-        box = Instance.new("Highlight")
-        box.Adornee = char
-        box.FillTransparency = 1
-        box.OutlineTransparency = 0
-        box.FillColor = espBoxColor
-        box.OutlineColor = espBoxColor
-        box.Parent = char
-    end
-    if espHitboxEnabled then
-        hitbox = Instance.new("Highlight")
-        hitbox.Adornee = char
-        hitbox.FillTransparency = 0.3
-        hitbox.OutlineTransparency = 1
-        hitbox.FillColor = espHitboxColor
-        hitbox.Parent = char
-    end
-    if espSkeletonEnabled then
-        skeleton = createSkeleton(char, espSkeletonColor)
-    end
-    espHighlights[player] = {box=box, hitbox=hitbox, skeleton=skeleton}
-end
-
-local function updateAllBoxColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.box then data.box.FillColor = color; data.box.OutlineColor = color end
-    end
-end
-local function updateAllHitboxColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.hitbox then data.hitbox.FillColor = color end
-    end
-end
-local function updateAllSkeletonColor(color)
-    for _, data in pairs(espHighlights) do
-        if data.skeleton then
-            for _, beam in ipairs(data.skeleton) do
-                beam.Color = ColorSequence.new(color)
-            end
-        end
-    end
-end
-
-local function enableESP()
-    if espEnabled then return end
-    espEnabled = true
-    print("[ESP] Enabled")
-    -- Показать настройки
-    if espSettingsFrame then
-        espSettingsFrame.Visible = true
-        TweenService:Create(espSettingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, 0, 0, 490)}):Play()
-    end
-    for _, player in ipairs(Players:GetPlayers()) do
-        createESP(player)
-        if not espCharacterAddedConns[player] then
-            espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
-                if espEnabled then createESP(player) end
-            end)
-        end
-    end
-    if not espPlayerAddedConn then
-        espPlayerAddedConn = Players.PlayerAdded:Connect(function(player)
-            if espEnabled then
-                createESP(player)
-                if not espCharacterAddedConns[player] then
-                    espCharacterAddedConns[player] = player.CharacterAdded:Connect(function(char)
-                        if espEnabled then createESP(player) end
-                    end)
-                end
-            end
-        end)
-    end
-end
-
-local function disableESP()
-    if not espEnabled then return end
-    espEnabled = false
-    print("[ESP] Disabled")
-    if espSettingsFrame then
-        TweenService:Create(espSettingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, 0, 0, 0)}):Play()
-        task.delay(0.35, function() espSettingsFrame.Visible = false end)
-    end
-    if espPlayerAddedConn then espPlayerAddedConn:Disconnect() espPlayerAddedConn = nil end
-    for _, conn in pairs(espCharacterAddedConns) do conn:Disconnect() end
-    espCharacterAddedConns = {}
-    for player in pairs(espHighlights) do removeESP(player) end
-end
-
-local function setBoxEnabled(enabled)
-    espBoxEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-
-local function setHitboxEnabled(enabled)
-    espHitboxEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-
-local function setSkeletonEnabled(enabled)
-    espSkeletonEnabled = enabled
-    if espEnabled then
-        for _, player in ipairs(Players:GetPlayers()) do
-            removeESP(player)
-            createESP(player)
-        end
-    end
-end
-
-local function setBoxColor(r, g, b)
-    espBoxColor = Color3.fromRGB(r, g, b)
-    updateAllBoxColor(espBoxColor)
-end
-local function setHitboxColor(r, g, b)
-    espHitboxColor = Color3.fromRGB(r, g, b)
-    updateAllHitboxColor(espHitboxColor)
-end
-local function setSkeletonColor(r, g, b)
-    espSkeletonColor = Color3.fromRGB(r, g, b)
-    updateAllSkeletonColor(espSkeletonColor)
 end
 
 -- ===== ВКЛАДКА PLAYERS =====
@@ -1812,6 +1803,7 @@ local function createPlayersContent()
     rebuildAllCards()
     return container
 end
+
 -- ===== GENERAL =====
 local function createGeneralContent()
     local content = Instance.new("ScrollingFrame")
@@ -1979,22 +1971,59 @@ local function createVisualContent()
     content.Parent = ContentFrame
 
     -- Toggle ESP
-    createToggle(content, "ESP", 10, function(enabled)
+    local espToggle = createToggle(content, "ESP", 10, function(enabled)
         if enabled then enableESP() else disableESP() end
+    end)
+
+    -- Кнопка раскрытия настроек
+    local settingsBtn = Instance.new("TextButton")
+    settingsBtn.Name = "ESPSettingsBtn"
+    settingsBtn.Size = UDim2.new(1, -20, 0, 25)
+    settingsBtn.Position = UDim2.new(0, 10, 0, 45)
+    settingsBtn.BackgroundColor3 = COLORS.Background
+    settingsBtn.BorderSizePixel = 1
+    settingsBtn.BorderColor3 = COLORS.Border
+    settingsBtn.Text = "Settings ▼"
+    settingsBtn.TextColor3 = COLORS.Text
+    settingsBtn.TextSize = 12
+    settingsBtn.Font = Enum.Font.Gotham
+    settingsBtn.AutoButtonColor = false
+    settingsBtn.Parent = content
+
+    settingsBtn.MouseEnter:Connect(function()
+        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play()
+    end)
+    settingsBtn.MouseLeave:Connect(function()
+        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play()
     end)
 
     -- Раскрывающийся фрейм с настройками
     local settingsFrame = Instance.new("Frame")
     settingsFrame.Name = "ESP_Settings"
-    settingsFrame.Size = UDim2.new(1, 0, 0, 0)
-    settingsFrame.Position = UDim2.new(0, 0, 0, 50)
+    settingsFrame.Size = UDim2.new(1, 0, 0, 0)  -- Начальная высота 0 (скрыт)
+    settingsFrame.Position = UDim2.new(0, 0, 0, 75)  -- Под кнопкой (было 50, теперь 75)
     settingsFrame.BackgroundColor3 = COLORS.Background
     settingsFrame.BorderSizePixel = 1
     settingsFrame.BorderColor3 = COLORS.Border
     settingsFrame.ClipsDescendants = true
-    settingsFrame.Visible = false
+    settingsFrame.Visible = true  -- Видим, но высота 0
     settingsFrame.Parent = content
     espSettingsFrame = settingsFrame
+
+    -- Логика раскрытия
+    local settingsOpen = false
+    local targetHeight = 490  -- Высота когда раскрыто
+
+    settingsBtn.MouseButton1Click:Connect(function()
+        settingsOpen = not settingsOpen
+        if settingsOpen then
+            settingsBtn.Text = "Settings ▲"
+            TweenService:Create(settingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+        else
+            settingsBtn.Text = "Settings ▼"
+            TweenService:Create(settingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+        end
+    end)
 
     local yOffset = 10
     -- Box Toggle
@@ -2036,7 +2065,7 @@ local function createVisualContent()
     createSlider(settingsFrame, "Skeleton B", yOffset, 0, 255, 0, function(v) setSkeletonColor(espSkeletonColor.R*255, espSkeletonColor.G*255, v) end)
     yOffset = yOffset + 40
 
-    settingsFrame.Size = UDim2.new(1, 0, 0, yOffset)
+    settingsFrame.Size = UDim2.new(1, 0, 0, yOffset)  -- фактическая высота содержимого
 
     return content
 end
