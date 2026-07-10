@@ -123,7 +123,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE HEALTH BAR (left side of character)
+    -- CREATE HEALTH BAR (left side, close to box)
     -- ============================================================
     local function createHealthBar(char)
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -133,8 +133,8 @@ return function(Context)
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESPHealth"
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 50, 0, 120)
-        billboard.StudsOffset = Vector3.new(-3.5, 0, 0) -- Left side, away from box
+        billboard.Size = UDim2.new(0, 40, 0, 100)
+        billboard.StudsOffset = Vector3.new(-2.2, 0, 0) -- Close left side
         billboard.Adornee = hrp
         billboard.Parent = char
 
@@ -142,7 +142,7 @@ return function(Context)
         local bg = Instance.new("Frame")
         bg.Name = "Background"
         bg.Size = UDim2.new(0, 6, 1, 0)
-        bg.Position = UDim2.new(0, 0, 0, 0)
+        bg.Position = UDim2.new(0.5, -3, 0, 0)
         bg.BackgroundColor3 = COLORS.HealthRed
         bg.BorderSizePixel = 1
         bg.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -152,20 +152,20 @@ return function(Context)
         local fill = Instance.new("Frame")
         fill.Name = "Fill"
         fill.Size = UDim2.new(0, 6, 1, 0)
-        fill.Position = UDim2.new(0, 0, 0, 0)
+        fill.Position = UDim2.new(0.5, -3, 0, 0)
         fill.BackgroundColor3 = COLORS.HealthGreen
         fill.BorderSizePixel = 0
         fill.Parent = billboard
 
-        -- Health text
+        -- Health text (next to bar, clearly visible)
         local healthText = Instance.new("TextLabel")
         healthText.Name = "HealthText"
-        healthText.Size = UDim2.new(0, 50, 0, 14)
-        healthText.Position = UDim2.new(0, -22, 0, -16)
+        healthText.Size = UDim2.new(0, 40, 0, 14)
+        healthText.Position = UDim2.new(0.5, -20, 0, -16)
         healthText.BackgroundTransparency = 1
         healthText.Text = tostring(math.floor(hum.Health))
         healthText.TextColor3 = getGradientColor()
-        healthText.TextSize = 11
+        healthText.TextSize = 12
         healthText.Font = Enum.Font.GothamBold
         healthText.TextStrokeTransparency = 0
         healthText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -175,7 +175,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE NAME LABEL (above head)
+    -- CREATE NAME LABEL (lower above head, not too high)
     -- ============================================================
     local function createNameLabel(char, playerName)
         local head = char:FindFirstChild("Head")
@@ -184,8 +184,8 @@ return function(Context)
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESPName"
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 200, 0, 30)
-        billboard.StudsOffset = Vector3.new(0, 2.8, 0) -- Above head, above box
+        billboard.Size = UDim2.new(0, 200, 0, 24)
+        billboard.StudsOffset = Vector3.new(0, 2.2, 0) -- Lower above head
         billboard.Adornee = head
         billboard.Parent = char
 
@@ -205,18 +205,18 @@ return function(Context)
     end
 
     -- ============================================================
-    -- CREATE DISTANCE LABEL (below name)
+    -- CREATE DISTANCE LABEL (just below box)
     -- ============================================================
     local function createDistanceLabel(char)
-        local head = char:FindFirstChild("Head")
-        if not head then return nil end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
 
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESPDistance"
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 200, 0, 20)
-        billboard.StudsOffset = Vector3.new(0, 1.5, 0) -- Below name, above box
-        billboard.Adornee = head
+        billboard.Size = UDim2.new(0, 100, 0, 18)
+        billboard.StudsOffset = Vector3.new(0, -2.8, 0) -- Just below box
+        billboard.Adornee = hrp
         billboard.Parent = char
 
         local label = Instance.new("TextLabel")
@@ -243,7 +243,7 @@ return function(Context)
         local fill = data.healthBar:FindFirstChild("Fill", true)
         if fill then
             fill.Size = UDim2.new(0, 6, healthPercent, 0)
-            fill.Position = UDim2.new(0, 0, 1 - healthPercent, 0)
+            fill.Position = UDim2.new(0.5, -3, 1 - healthPercent, 0)
         end
         if data.healthText then
             data.healthText.Text = tostring(math.floor(hum.Health))
