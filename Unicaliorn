@@ -635,6 +635,7 @@ local function setupWindowDrag(window, dragElement)
         end
     end
 end
+
 -- ===== SERVER INFO =====
 local function createServerInfoWindow()
     print("[ServerInfo] Opened")
@@ -937,6 +938,7 @@ local function createProfileWindow(targetPlayer)
     window.BackgroundTransparency = 1
     TweenService:Create(window, TWEEN_APPEAR, { Position = UDim2.new(0.5, -150, 0.5, -175), BackgroundTransparency = 0 }):Play()
 end
+
 -- ===== SPECTATE (управляемая камера) =====
 local function toggleSpectate(player)
     if activeSpectatePlayer == player then
@@ -1476,6 +1478,7 @@ local function disableInfinityJump()
         infinityJumpConnection = nil
     end
 end
+
 -- ===== ВКЛАДКА PLAYERS =====
 local function createPlayersContent()
     local container = Instance.new("Frame")
@@ -1800,6 +1803,7 @@ local function createPlayersContent()
     rebuildAllCards()
     return container
 end
+
 -- ===== GENERAL =====
 local function createGeneralContent()
     local content = Instance.new("ScrollingFrame")
@@ -1950,175 +1954,10 @@ local function createMovementContent()
 
     return content
 end
--- ===== COLOR PICKER POPUP =====
-local activeColorPicker = nil
-
-local function closeActiveColorPicker()
-    if activeColorPicker then
-        activeColorPicker:Destroy()
-        activeColorPicker = nil
-    end
-end
-
-local function createColorPickerPopup(colorSquare, currentColor, onColorChanged)
-    closeActiveColorPicker()
-
-    local popup = Instance.new("Frame")
-    popup.Name = "ColorPickerPopup"
-    popup.Size = UDim2.new(0, 200, 0, 180)
-    popup.BackgroundColor3 = COLORS.Background
-    popup.BorderSizePixel = 1
-    popup.BorderColor3 = COLORS.Border
-    popup.Parent = ScreenGui
-
-    local pos = colorSquare.AbsolutePosition
-    popup.Position = UDim2.new(0, math.clamp(pos.X + 25, 0, workspace.CurrentCamera.ViewportSize.X - 210), 0, math.clamp(pos.Y - 90, 0, workspace.CurrentCamera.ViewportSize.Y - 190))
-
-    local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 20)
-    titleBar.BackgroundColor3 = COLORS.Background
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = popup
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 20, 0, 20)
-    closeBtn.Position = UDim2.new(1, -20, 0, 0)
-    closeBtn.BackgroundColor3 = COLORS.Background
-    closeBtn.BorderSizePixel = 1
-    closeBtn.Text = "X"
-    closeBtn.TextColor3 = COLORS.CloseButton
-    closeBtn.TextSize = 14
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.AutoButtonColor = false
-    closeBtn.Parent = titleBar
-    closeBtn.MouseButton1Click:Connect(function()
-        closeActiveColorPicker()
-    end)
-
-    local preview = Instance.new("Frame")
-    preview.Size = UDim2.new(0, 50, 0, 50)
-    preview.Position = UDim2.new(0, 10, 0, 30)
-    preview.BackgroundColor3 = currentColor
-    preview.BorderSizePixel = 1
-    preview.BorderColor3 = COLORS.Border
-    preview.Parent = popup
-
-    local r, g, b = math.floor(currentColor.R * 255), math.floor(currentColor.G * 255), math.floor(currentColor.B * 255)
-
-    local function updateColor()
-        local col = Color3.fromRGB(r, g, b)
-        preview.BackgroundColor3 = col
-        if onColorChanged then onColorChanged(col) end
-    end
-
-    local function createRGBSlider(letter, yPos, value)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, -75, 0, 30)
-        frame.Position = UDim2.new(0, 65, 0, yPos)
-        frame.BackgroundTransparency = 1
-        frame.Parent = popup
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(0, 15, 0, 15)
-        lbl.Position = UDim2.new(0, 0, 0, 8)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = letter
-        lbl.TextColor3 = COLORS.Text
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 12
-        lbl.Parent = frame
-
-        local bg = Instance.new("Frame")
-        bg.Size = UDim2.new(1, -25, 0, 12)
-        bg.Position = UDim2.new(0, 18, 0, 9)
-        bg.BackgroundColor3 = COLORS.SliderBg
-        bg.BorderSizePixel = 1
-        bg.Parent = frame
-
-        local fill = Instance.new("Frame")
-        fill.Size = UDim2.new(0, 0, 1, 0)
-        fill.BackgroundColor3 = COLORS.SliderFill
-        fill.BorderSizePixel = 0
-        fill.Parent = bg
-
-        local knob = Instance.new("TextButton")
-        knob.Size = UDim2.new(0, 12, 0, 12)
-        knob.Position = UDim2.new(0, -6, 0.5, -6)
-        knob.BackgroundColor3 = COLORS.Text
-        knob.BorderSizePixel = 0
-        knob.Text = ""
-        knob.AutoButtonColor = false
-        knob.Parent = bg
-
-        local valLabel = Instance.new("TextLabel")
-        valLabel.Size = UDim2.new(0, 30, 0, 15)
-        valLabel.Position = UDim2.new(1, -30, 0, 8)
-        valLabel.BackgroundTransparency = 1
-        valLabel.Text = tostring(value)
-        valLabel.TextColor3 = COLORS.Text
-        valLabel.Font = Enum.Font.Gotham
-        valLabel.TextSize = 10
-        valLabel.TextXAlignment = Enum.TextXAlignment.Right
-        valLabel.Parent = frame
-
-        local function setSlider(val)
-            local percent = val / 255
-            fill.Size = UDim2.new(percent, 0, 1, 0)
-            knob.Position = UDim2.new(percent, -6, 0.5, -6)
-            valLabel.Text = tostring(val)
-        end
-
-        local dragging = false
-        local function updateFromInput(input)
-            local relX = input.Position.X - bg.AbsolutePosition.X
-            local percent = math.clamp(relX / bg.AbsoluteSize.X, 0, 1)
-            local newVal = math.floor(percent * 255 + 0.5)
-            if letter == "R" then r = newVal elseif letter == "G" then g = newVal elseif letter == "B" then b = newVal end
-            setSlider(newVal)
-            updateColor()
-        end
-
-        knob.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = true
-                local moveConn, releaseConn
-                moveConn = UserInputService.InputChanged:Connect(function(input2)
-                    if input2.UserInputType == Enum.UserInputType.MouseMovement and dragging then
-                        updateFromInput(input2)
-                    end
-                end)
-                releaseConn = UserInputService.InputEnded:Connect(function(input2)
-                    if input2.UserInputType == Enum.UserInputType.MouseButton1 then
-                        dragging = false
-                        moveConn:Disconnect()
-                        releaseConn:Disconnect()
-                    end
-                end)
-            end
-        end)
-        bg.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                updateFromInput(input)
-            end
-        end)
-
-        setSlider(value)
-        return setSlider
-    end
-
-    createRGBSlider("R", 90, r)
-    createRGBSlider("G", 125, g)
-    createRGBSlider("B", 160, b)
-
-    popup.Destroying:Connect(function()
-        if activeColorPicker == popup then activeColorPicker = nil end
-    end)
-
-    activeColorPicker = popup
-    return popup
-end
 
 -- ===== VISUAL =====
+local espSettingsFrame = nil
+
 local function createVisualContent()
     local content = Instance.new("ScrollingFrame")
     content.Name = "Content_Visual"
@@ -2127,171 +1966,132 @@ local function createVisualContent()
     content.BorderSizePixel = 0
     content.ScrollBarThickness = 4
     content.ScrollBarImageColor3 = COLORS.Border
-    content.CanvasSize = UDim2.new(0, 0, 0, 200)
+    content.CanvasSize = UDim2.new(0, 0, 0, 600)
     content.Visible = false
     content.Parent = ContentFrame
 
-    -- Строка с ESP toggle и кнопкой раскрытия настроек
-    local espRow = Instance.new("Frame")
-    espRow.Size = UDim2.new(1, -20, 0, 30)
-    espRow.Position = UDim2.new(0, 10, 0, 10)
-    espRow.BackgroundColor3 = COLORS.Background
-    espRow.BorderSizePixel = 0
-    espRow.Parent = content
-
-    local espToggle = createToggle(espRow, "ESP", 0, function(enabled)
+    -- Toggle ESP
+    local espToggle = createToggle(content, "ESP", 10, function(enabled)
         if enabled then enableESP() else disableESP() end
     end)
 
-    local expandBtn = Instance.new("TextButton")
-    expandBtn.Size = UDim2.new(0, 30, 0, 22)
-    expandBtn.Position = UDim2.new(1, -35, 0.5, -11)
-    expandBtn.BackgroundColor3 = COLORS.Background
-    expandBtn.BorderSizePixel = 1
-    expandBtn.BorderColor3 = COLORS.Border
-    expandBtn.Text = "▼"
-    expandBtn.TextColor3 = COLORS.Text
-    expandBtn.TextSize = 14
-    expandBtn.Font = Enum.Font.Gotham
-    expandBtn.AutoButtonColor = false
-    expandBtn.Parent = espRow
+    -- Кнопка раскрытия настроек
+    local settingsBtn = Instance.new("TextButton")
+    settingsBtn.Name = "ESPSettingsBtn"
+    settingsBtn.Size = UDim2.new(1, -20, 0, 25)
+    settingsBtn.Position = UDim2.new(0, 10, 0, 45)
+    settingsBtn.BackgroundColor3 = COLORS.Background
+    settingsBtn.BorderSizePixel = 1
+    settingsBtn.BorderColor3 = COLORS.Border
+    settingsBtn.Text = "Settings ▼"
+    settingsBtn.TextColor3 = COLORS.Text
+    settingsBtn.TextSize = 12
+    settingsBtn.Font = Enum.Font.Gotham
+    settingsBtn.AutoButtonColor = false
+    settingsBtn.Parent = content
+
+    settingsBtn.MouseEnter:Connect(function()
+        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.ButtonHover}):Play()
+    end)
+    settingsBtn.MouseLeave:Connect(function()
+        TweenService:Create(settingsBtn, TWEEN_HOVER, {BackgroundColor3 = COLORS.Background}):Play()
+    end)
 
     -- Раскрывающийся фрейм с настройками
     local settingsFrame = Instance.new("Frame")
     settingsFrame.Name = "ESP_Settings"
-    settingsFrame.Size = UDim2.new(1, 0, 0, 0)
-    settingsFrame.Position = UDim2.new(0, 0, 0, 45)
+    settingsFrame.Size = UDim2.new(1, 0, 0, 0)  -- Начальная высота 0 (скрыт)
+    settingsFrame.Position = UDim2.new(0, 0, 0, 75)  -- Под кнопкой (было 50, теперь 75)
     settingsFrame.BackgroundColor3 = COLORS.Background
     settingsFrame.BorderSizePixel = 1
     settingsFrame.BorderColor3 = COLORS.Border
     settingsFrame.ClipsDescendants = true
+    settingsFrame.Visible = true  -- Видим, но высота 0
     settingsFrame.Parent = content
+    espSettingsFrame = settingsFrame
 
+    -- Логика раскрытия
     local settingsOpen = false
-    local targetHeight = 0
+    local targetHeight = 490  -- Высота когда раскрыто
 
-    expandBtn.MouseButton1Click:Connect(function()
+    settingsBtn.MouseButton1Click:Connect(function()
         settingsOpen = not settingsOpen
         if settingsOpen then
-            expandBtn.Text = "▲"
+            settingsBtn.Text = "Settings ▲"
             TweenService:Create(settingsFrame, TWEEN_OPEN, {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
         else
-            expandBtn.Text = "▼"
+            settingsBtn.Text = "Settings ▼"
             TweenService:Create(settingsFrame, TWEEN_CLOSE, {Size = UDim2.new(1, 0, 0, 0)}):Play()
         end
     end)
 
-    -- Вспомогательная функция для строки с toggle и цветным квадратиком
-    local function addColorSetting(name, yPos, defaultEnabled, defaultColor, onToggle, onColorChange)
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -20, 0, 30)
-        row.Position = UDim2.new(0, 10, 0, yPos)
-        row.BackgroundColor3 = COLORS.Background
-        row.BorderSizePixel = 0
-        row.Parent = settingsFrame
+    local yOffset = 10
+    -- Box Toggle
+    createToggle(settingsFrame, "Box", yOffset, function(enabled)
+        setBoxEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Box RGB Sliders
+    createSlider(settingsFrame, "Box R", yOffset, 0, 255, 255, function(v) setBoxColor(v, espBoxColor.G*255, espBoxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Box G", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, v, espBoxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Box B", yOffset, 0, 255, 255, function(v) setBoxColor(espBoxColor.R*255, espBoxColor.G*255, v) end)
+    yOffset = yOffset + 40
 
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0, 70, 1, 0)
-        label.Position = UDim2.new(0, 5, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = name
-        label.TextColor3 = COLORS.Text
-        label.TextSize = 13
-        label.Font = Enum.Font.Gotham
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = row
+    -- Hitbox Toggle
+    createToggle(settingsFrame, "Hitbox", yOffset, function(enabled)
+        setHitboxEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Hitbox RGB Sliders
+    createSlider(settingsFrame, "Hitbox R", yOffset, 0, 255, 255, function(v) setHitboxColor(v, espHitboxColor.G*255, espHitboxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Hitbox G", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, v, espHitboxColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Hitbox B", yOffset, 0, 255, 0, function(v) setHitboxColor(espHitboxColor.R*255, espHitboxColor.G*255, v) end)
+    yOffset = yOffset + 40
 
-        local toggleBg = Instance.new("TextButton")
-        toggleBg.Size = UDim2.new(0, 50, 0, 22)
-        toggleBg.Position = UDim2.new(0, 80, 0.5, -11)
-        toggleBg.BackgroundColor3 = COLORS.ToggleOff
-        toggleBg.BorderSizePixel = 1
-        toggleBg.BorderColor3 = COLORS.Border
-        toggleBg.Text = ""
-        toggleBg.AutoButtonColor = false
-        toggleBg.Parent = row
+    -- Skeleton Toggle
+    createToggle(settingsFrame, "Skeleton", yOffset, function(enabled)
+        setSkeletonEnabled(enabled)
+    end)
+    yOffset = yOffset + 40
+    -- Skeleton RGB Sliders
+    createSlider(settingsFrame, "Skeleton R", yOffset, 0, 255, 0, function(v) setSkeletonColor(v, espSkeletonColor.G*255, espSkeletonColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Skeleton G", yOffset, 0, 255, 255, function(v) setSkeletonColor(espSkeletonColor.R*255, v, espSkeletonColor.B*255) end)
+    yOffset = yOffset + 40
+    createSlider(settingsFrame, "Skeleton B", yOffset, 0, 255, 0, function(v) setSkeletonColor(espSkeletonColor.R*255, espSkeletonColor.G*255, v) end)
+    yOffset = yOffset + 40
 
-        local toggleKnob = Instance.new("Frame")
-        toggleKnob.Size = UDim2.new(0, 18, 0, 18)
-        toggleKnob.Position = UDim2.new(0, 2, 0.5, -9)
-        toggleKnob.BackgroundColor3 = COLORS.Text
-        toggleKnob.BorderSizePixel = 0
-        toggleKnob.Parent = toggleBg
-
-        local enabled = defaultEnabled
-        local function setToggleState(state)
-            enabled = state
-            if enabled then
-                toggleBg.BackgroundColor3 = COLORS.ToggleOn
-                TweenService:Create(toggleKnob, TWEEN_HOVER, {Position = UDim2.new(1, -20, 0.5, -9)}):Play()
-            else
-                toggleBg.BackgroundColor3 = COLORS.ToggleOff
-                TweenService:Create(toggleKnob, TWEEN_HOVER, {Position = UDim2.new(0, 2, 0.5, -9)}):Play()
-            end
-        end
-        setToggleState(defaultEnabled)
-
-        toggleBg.MouseButton1Click:Connect(function()
-            enabled = not enabled
-            setToggleState(enabled)
-            if onToggle then onToggle(enabled) end
-        end)
-
-        local colorSquare = Instance.new("TextButton")
-        colorSquare.Size = UDim2.new(0, 22, 0, 22)
-        colorSquare.Position = UDim2.new(0, 140, 0.5, -11)
-        colorSquare.BackgroundColor3 = defaultColor
-        colorSquare.BorderSizePixel = 1
-        colorSquare.BorderColor3 = COLORS.Border
-        colorSquare.Text = ""
-        colorSquare.AutoButtonColor = false
-        colorSquare.Parent = row
-
-        local currentCol = defaultColor
-        colorSquare.MouseButton1Click:Connect(function()
-            closeActiveColorPicker()
-            createColorPickerPopup(colorSquare, currentCol, function(newColor)
-                currentCol = newColor
-                colorSquare.BackgroundColor3 = newColor
-                if onColorChange then onColorChange(newColor) end
-            end)
-        end)
-
-        return {
-            row = row,
-            setColor = function(col)
-                currentCol = col
-                colorSquare.BackgroundColor3 = col
-            end,
-            setEnabled = setToggleState
-        }
-    end
-
-    local yOff = 5
-    local boxSetting = addColorSetting("Box", yOff, espBoxEnabled, espBoxColor,
-        function(enabled) setBoxEnabled(enabled) end,
-        function(col) setBoxColor(col.R*255, col.G*255, col.B*255) end
-    )
-    yOff = yOff + 35
-
-    local hitboxSetting = addColorSetting("Hitbox", yOff, espHitboxEnabled, espHitboxColor,
-        function(enabled) setHitboxEnabled(enabled) end,
-        function(col) setHitboxColor(col.R*255, col.G*255, col.B*255) end
-    )
-    yOff = yOff + 35
-
-    local skeletonSetting = addColorSetting("Skeleton", yOff, espSkeletonEnabled, espSkeletonColor,
-        function(enabled) setSkeletonEnabled(enabled) end,
-        function(col) setSkeletonColor(col.R*255, col.G*255, col.B*255) end
-    )
-    yOff = yOff + 35
-
-    targetHeight = yOff + 10
-    settingsFrame.Size = UDim2.new(1, 0, 0, targetHeight)
+    settingsFrame.Size = UDim2.new(1, 0, 0, yOffset)  -- фактическая высота содержимого
 
     return content
 end
--- ===== САЙДБАР И ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
+
+-- ===== ОСТАЛЬНЫЕ ВКЛАДКИ =====
+local function createEmptyContent(name)
+    local content = Instance.new("Frame")
+    content.Name = "Content_" .. name
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.Visible = false
+    content.Parent = ContentFrame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = string.upper(name)
+    label.TextColor3 = COLORS.Text
+    label.TextSize = 24
+    label.Font = Enum.Font.Gotham
+    label.TextTransparency = 1
+    label.Parent = content
+    return content
+end
+
+-- Сайдбар и переключение
 local buttonNames = {"General", "Players", "Misc", "Movement", "Visual"}
 local sidebarButtons = {}
 local buttonSeparators = {}
@@ -2401,7 +2201,6 @@ local function destroyScript()
     stopFly()
     disableInfinityJump()
     disableESP()
-    closeActiveColorPicker()
 
     local fadeOut = TweenService:Create(MainFrame, TWEEN_CLOSE, { BackgroundTransparency = 1, Size = UDim2.new(0, 550, 0, 380) })
     TweenService:Create(TitleBar, TWEEN_CLOSE, {BackgroundTransparency = 1}):Play()
@@ -2418,7 +2217,7 @@ local function destroyScript()
     fadeOut.Completed:Wait()
 
     for _, v in ipairs(ScreenGui:GetChildren()) do
-        if v.Name:find("Overlay") or v.Name:find("Window") or v.Name:find("ColorPicker") then v:Destroy() end
+        if v.Name:find("Overlay") or v.Name:find("Window") then v:Destroy() end
     end
     ScreenGui:Destroy()
     _G.UnicaliornLoaded = nil
