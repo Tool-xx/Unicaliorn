@@ -90,14 +90,17 @@ return function(Context)
     CloseButton.Parent = TitleBar
     Context.UI.CloseButton = CloseButton
 
-    local TopSeparator = Instance.new("Frame")
-    TopSeparator.Name = "TopSeparator"
-    TopSeparator.Size = UDim2.new(1, 0, 0, 1)
-    TopSeparator.Position = UDim2.new(0, 0, 0, UI_DIMS.TitleBarHeight)
-    TopSeparator.BackgroundColor3 = COLORS.Border
-    TopSeparator.BorderSizePixel = 0
-    TopSeparator.Parent = MainFrame
-    Context.UI.TopSeparator = TopSeparator
+    -- ============================================================
+    -- BOTTOM SEPARATOR (под TitleBar, как VerticalSeparator)
+    -- ============================================================
+    local BottomSeparator = Instance.new("Frame")
+    BottomSeparator.Name = "BottomSeparator"
+    BottomSeparator.Size = UDim2.new(1, 0, 0, 1)
+    BottomSeparator.Position = UDim2.new(0, 0, 0, UI_DIMS.TitleBarHeight)
+    BottomSeparator.BackgroundColor3 = COLORS.Border
+    BottomSeparator.BorderSizePixel = 0
+    BottomSeparator.Parent = MainFrame
+    Context.UI.BottomSeparator = BottomSeparator
 
     -- ============================================================
     -- SIDEBAR
@@ -230,6 +233,7 @@ return function(Context)
             TweenService:Create(Sidebar, TWEEN.Close, {Size = UDim2.new(0, UI_DIMS.SidebarWidth, 0, 0)}):Play()
             TweenService:Create(ContentFrame, TWEEN.Close, {Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 0, 0)}):Play()
             TweenService:Create(VerticalSeparator, TWEEN.Close, {Size = UDim2.new(0, 1, 0, 0)}):Play()
+            TweenService:Create(BottomSeparator, TWEEN.Close, {Size = UDim2.new(1, 0, 0, 0)}):Play()
             for _, btn in ipairs(sidebarButtons) do
                 TweenService:Create(btn, TWEEN.Close, {TextTransparency = 1}):Play()
             end
@@ -255,6 +259,7 @@ return function(Context)
                 TweenService:Create(Sidebar, TWEEN.Open, {Size = UDim2.new(0, UI_DIMS.SidebarWidth, 1, -UI_DIMS.TitleBarHeight)}):Play()
                 TweenService:Create(ContentFrame, TWEEN.Open, {Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -UI_DIMS.TitleBarHeight)}):Play()
                 TweenService:Create(VerticalSeparator, TWEEN.Open, {Size = UDim2.new(0, 1, 1, -UI_DIMS.TitleBarHeight)}):Play()
+                TweenService:Create(BottomSeparator, TWEEN.Open, {Size = UDim2.new(1, 0, 0, 1)}):Play()
                 for _, btn in ipairs(sidebarButtons) do
                     TweenService:Create(btn, TWEEN.Open, {TextTransparency = 0}):Play()
                 end
@@ -302,7 +307,7 @@ return function(Context)
         TweenService:Create(TitleLabel, TWEEN.Close, {TextTransparency = 1}):Play()
         TweenService:Create(MinimizeButton, TWEEN.Close, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
         TweenService:Create(CloseButton, TWEEN.Close, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-        TweenService:Create(TopSeparator, TWEEN.Close, {BackgroundTransparency = 1}):Play()
+        TweenService:Create(BottomSeparator, TWEEN.Close, {BackgroundTransparency = 1}):Play()
         TweenService:Create(Sidebar, TWEEN.Close, {BackgroundTransparency = 1}):Play()
         TweenService:Create(VerticalSeparator, TWEEN.Close, {BackgroundTransparency = 1}):Play()
         for _, button in ipairs(sidebarButtons) do
@@ -370,9 +375,9 @@ return function(Context)
             TweenService:Create(CloseButton, TWEEN.Fade, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
         end)
 
-        TopSeparator.BackgroundTransparency = 1
+        BottomSeparator.BackgroundTransparency = 1
         task.delay(0.3, function()
-            TweenService:Create(TopSeparator, TWEEN.Fade, {BackgroundTransparency = 0}):Play()
+            TweenService:Create(BottomSeparator, TWEEN.Fade, {BackgroundTransparency = 0}):Play()
         end)
 
         VerticalSeparator.BackgroundTransparency = 1
