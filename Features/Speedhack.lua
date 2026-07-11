@@ -1,98 +1,64 @@
--- Features/Speedhack.lua (Universal CFrame-based)
+-- Features/Speedhack.lua
+-- Speedhack feature: uses GetPropertyChangedSignal to persist WalkSpeed
+-- Receives Context, returns Feature table
+
 return function(Context)
     local FeatureState = Context.FeatureState
     local LocalPlayer = Context.LocalPlayer
     local Config = Context.Config
-    local RunService = Context.Services.RunService
-    local UserInputService = Context.Services.UserInputService
 
     local Speedhack = {}
-    local heartbeatConnection = nil
-    local lastPosition = nil
+    local walkSpeedConnection = nil
 
     -- ============================================================
-    -- GET MOVEMENT DIRECTION FROM INPUT
+    -- APPLY SPEED WITH PROPERTY LOCK
     -- ============================================================
-    local function getMoveDirection()
-        local camera = workspace.CurrentCamera
-        if not camera then return Vector3.zero end
+    local function applySpeed(speed)
+        local char = LocalPlayer.Character
+        if not char then return end
         
-        local moveDir = Vector3.zero
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveDir = moveDir + camera.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveDir = moveDir - camera.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveDir = moveDir - camera.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveDir = moveDir + camera.CFrame.RightVector
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then
+            hum = char:WaitForChild("Humanoid", 3)
+            if not hum then return end
         end
         
-        -- Убираем Y-компонент (чтобы не летать при W/S)
-        moveDir = Vector3.new(moveDir.X, 0, moveDir.Z)
-        
-        if moveDir.Magnitude > 0 then
-            moveDir = moveDir.Unit
-        end
-        
-        return moveDir
+        hum.WalkSpeed = speed
     end
 
     -- ============================================================
-    -- CFRAME SPEEDHACK LOOP
+    -- LOCK WALKSPEED (GetPropertyChangedSignal)
     -- ============================================================
-    local function startSpeedLoop()
-        if heartbeatConnection then return end
+    local function lockWalkSpeed(speed)
+        local char = LocalPlayer.Character
+        if not char then return end
         
-        heartbeatConnection = RunService.Heartbeat:Connect(function(dt)
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        
+        -- Отключаем старый коннекшен если есть
+        if walkSpeedConnection then
+            walkSpeedConnection:Disconnect()
+            walkSpeedConnection = nil
+        end
+        
+        -- Ловим любые попытки игры изменить WalkSpeed
+        walkSpeedConnection = hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
             if not FeatureState.speedhackEnabled then return end
-            
-            local char = LocalPlayer.Character
-            if not char then return end
-            
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            
-            local moveDir = getMoveDirection()
-            if moveDir.Magnitude == 0 then 
-                lastPosition = root.Position
-                return 
+            if hum.WalkSpeed ~= FeatureState.speedhackSpeed then
+                hum.WalkSpeed = FeatureState.speedhackSpeed
             end
-            
-            -- Рассчитываем новую позицию
-            local speed = FeatureState.speedhackSpeed
-            local newPos = root.Position + (moveDir * speed * dt)
-            
-            -- Сохраняем высоту (чтобы не проваливаться)
-            if hum then
-                local rayParams = RaycastParams.new()
-                rayParams.FilterDescendantsInstances = {char}
-                rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-                
-                local ray = workspace:Raycast(root.Position, Vector3.new(0, -10, 0), rayParams)
-                if ray then
-                    newPos = Vector3.new(newPos.X, math.max(newPos.Y, ray.Position.Y + hum.HipHeight + 1), newPos.Z)
-                end
-            end
-            
-            -- Применяем через CFrame
-            root.CFrame = CFrame.new(newPos) * CFrame.Angles(0, math.atan2(moveDir.X, moveDir.Z), 0)
-            lastPosition = newPos
         end)
+        
+        -- Устанавливаем начальное значение
+        hum.WalkSpeed = speed
     end
 
-    local function stopSpeedLoop()
-        if heartbeatConnection then
-            heartbeatConnection:Disconnect()
-            heartbeatConnection = nil
+    local function unlockWalkSpeed()
+        if walkSpeedConnection then
+            walkSpeedConnection:Disconnect()
+            walkSpeedConnection = nil
         end
-        lastPosition = nil
     end
 
     -- ============================================================
@@ -101,15 +67,23 @@ return function(Context)
     function Speedhack.Enable()
         if FeatureState.speedhackEnabled then return end
         FeatureState.speedhackEnabled = true
-        print("[Speedhack] Enabled CFrame mode (" .. FeatureState.speedhackSpeed .. ")")
+        print("[Speedhack] Enabled (" .. FeatureState.speedhackSpeed .. ")")
         
-        startSpeedLoop()
+        lockWalkSpeed(FeatureState.speedhackSpeed)
 
-        -- На респавн перезапускаем
+        -- На респавн переподключаем ловушку
         FeatureState.speedhackCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
             if not FeatureState.speedhackEnabled then return end
-            task.wait(0.2)
-            startSpeedLoop()
+            
+            local hum = char:WaitForChild("Humanoid", 3)
+            if not hum then return end
+            
+            -- Небольшая задержка для стабильности
+            task.delay(0.1, function()
+                if FeatureState.speedhackEnabled then
+                    lockWalkSpeed(FeatureState.speedhackSpeed)
+                end
+            end)
         end)
     end
 
@@ -121,21 +95,14 @@ return function(Context)
         FeatureState.speedhackEnabled = false
         print("[Speedhack] Disabled")
         
-        stopSpeedLoop()
+        unlockWalkSpeed()
         
         if FeatureState.speedhackCharConnection then
             FeatureState.speedhackCharConnection:Disconnect()
             FeatureState.speedhackCharConnection = nil
         end
         
-        -- Восстанавливаем WalkSpeed на всякий случай
-        local char = LocalPlayer.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = Config.DEFAULTS.WalkSpeed
-            end
-        end
+        applySpeed(Config.DEFAULTS.WalkSpeed)
     end
 
     -- ============================================================
@@ -143,8 +110,15 @@ return function(Context)
     -- ============================================================
     function Speedhack.SetSpeed(value)
         FeatureState.speedhackSpeed = value
+        if FeatureState.speedhackEnabled then
+            -- Переподключаем с новой скоростью
+            lockWalkSpeed(value)
+        end
     end
 
+    -- ============================================================
+    -- GET SPEED VALUE
+    -- ============================================================
     function Speedhack.GetSpeed()
         return FeatureState.speedhackSpeed
     end
@@ -162,10 +136,13 @@ return function(Context)
         end
     end
 
+    -- ============================================================
+    -- IS ENABLED
+    -- ============================================================
     function Speedhack.IsEnabled()
         return FeatureState.speedhackEnabled
     end
 
-    print("[Feature] Speedhack module loaded (CFrame universal).")
+    print("[Feature] Speedhack module loaded.")
     return Speedhack
 end
