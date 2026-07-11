@@ -55,7 +55,7 @@ return {
         TitleLabel = nil,
         MinimizeButton = nil,
         CloseButton = nil,
-        TopSeparator = nil,
+        BottomSeparator = nil,
         Sidebar = nil,
         VerticalSeparator = nil,
         SidebarButtonsContainer = nil,
@@ -90,6 +90,8 @@ return {
         activeButton = nil,
         activeColorMenu = nil,
         colorMenuConnections = {},
+        bindListening = nil,
+        bindInputConnection = nil,
     },
 
     -- ============================================================
@@ -154,6 +156,10 @@ return {
         -- Infinity Jump
         infinityJumpEnabled = false,
         infinityJumpConnection = nil,
+
+        -- Binds
+        binds = {},
+        bindGlobalConnection = nil,
     },
 
     -- ============================================================
