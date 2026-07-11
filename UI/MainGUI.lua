@@ -46,6 +46,7 @@ return function(Context)
     TitleBar.Size = UDim2.new(1, 0, 0, UI_DIMS.TitleBarHeight)
     TitleBar.BackgroundColor3 = COLORS.Background
     TitleBar.BorderSizePixel = 0
+    TitleBar.ZIndex = 2
     TitleBar.Parent = MainFrame
     Context.UI.TitleBar = TitleBar
 
@@ -59,6 +60,7 @@ return function(Context)
     TitleLabel.TextSize = 16
     TitleLabel.Font = Enum.Font.GothamBold
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.ZIndex = 2
     TitleLabel.Parent = TitleBar
     Context.UI.TitleLabel = TitleLabel
 
@@ -73,6 +75,7 @@ return function(Context)
     MinimizeButton.TextSize = 18
     MinimizeButton.Font = Enum.Font.GothamBold
     MinimizeButton.AutoButtonColor = false
+    MinimizeButton.ZIndex = 2
     MinimizeButton.Parent = TitleBar
     Context.UI.MinimizeButton = MinimizeButton
 
@@ -87,11 +90,12 @@ return function(Context)
     CloseButton.TextSize = 18
     CloseButton.Font = Enum.Font.GothamBold
     CloseButton.AutoButtonColor = false
+    CloseButton.ZIndex = 2
     CloseButton.Parent = TitleBar
     Context.UI.CloseButton = CloseButton
 
     -- ============================================================
-    -- BOTTOM SEPARATOR (под TitleBar, как VerticalSeparator)
+    -- BOTTOM SEPARATOR (под TitleBar, над Sidebar и ContentFrame)
     -- ============================================================
     local BottomSeparator = Instance.new("Frame")
     BottomSeparator.Name = "BottomSeparator"
@@ -99,28 +103,31 @@ return function(Context)
     BottomSeparator.Position = UDim2.new(0, 0, 0, UI_DIMS.TitleBarHeight)
     BottomSeparator.BackgroundColor3 = COLORS.Border
     BottomSeparator.BorderSizePixel = 0
+    BottomSeparator.ZIndex = 3
     BottomSeparator.Parent = MainFrame
     Context.UI.BottomSeparator = BottomSeparator
 
     -- ============================================================
-    -- SIDEBAR
+    -- SIDEBAR (сдвинута на 1px вниз, чтобы линия была видна)
     -- ============================================================
     local Sidebar = Instance.new("Frame")
     Sidebar.Name = "Sidebar"
-    Sidebar.Size = UDim2.new(0, UI_DIMS.SidebarWidth, 1, -UI_DIMS.TitleBarHeight)
-    Sidebar.Position = UDim2.new(0, 0, 0, UI_DIMS.TitleBarHeight)
+    Sidebar.Size = UDim2.new(0, UI_DIMS.SidebarWidth, 1, -(UI_DIMS.TitleBarHeight + 1))
+    Sidebar.Position = UDim2.new(0, 0, 0, UI_DIMS.TitleBarHeight + 1)
     Sidebar.BackgroundColor3 = COLORS.Background
     Sidebar.BorderSizePixel = 0
     Sidebar.ClipsDescendants = true
+    Sidebar.ZIndex = 1
     Sidebar.Parent = MainFrame
     Context.UI.Sidebar = Sidebar
 
     local VerticalSeparator = Instance.new("Frame")
     VerticalSeparator.Name = "VerticalSeparator"
-    VerticalSeparator.Size = UDim2.new(0, 1, 1, -UI_DIMS.TitleBarHeight)
-    VerticalSeparator.Position = UDim2.new(0, UI_DIMS.SidebarWidth, 0, UI_DIMS.TitleBarHeight)
+    VerticalSeparator.Size = UDim2.new(0, 1, 1, -(UI_DIMS.TitleBarHeight + 1))
+    VerticalSeparator.Position = UDim2.new(0, UI_DIMS.SidebarWidth, 0, UI_DIMS.TitleBarHeight + 1)
     VerticalSeparator.BackgroundColor3 = COLORS.Border
     VerticalSeparator.BorderSizePixel = 0
+    VerticalSeparator.ZIndex = 2
     VerticalSeparator.Parent = MainFrame
     Context.UI.VerticalSeparator = VerticalSeparator
 
@@ -132,15 +139,16 @@ return function(Context)
     Context.UI.SidebarButtonsContainer = SidebarButtonsContainer
 
     -- ============================================================
-    -- CONTENT FRAME
+    -- CONTENT FRAME (сдвинута на 1px вниз, чтобы линия была видна)
     -- ============================================================
     local ContentFrame = Instance.new("Frame")
     ContentFrame.Name = "ContentFrame"
-    ContentFrame.Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -UI_DIMS.TitleBarHeight)
-    ContentFrame.Position = UDim2.new(0, UI_DIMS.SidebarWidth + 1, 0, UI_DIMS.TitleBarHeight)
+    ContentFrame.Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -(UI_DIMS.TitleBarHeight + 1))
+    ContentFrame.Position = UDim2.new(0, UI_DIMS.SidebarWidth + 1, 0, UI_DIMS.TitleBarHeight + 1)
     ContentFrame.BackgroundColor3 = COLORS.Background
     ContentFrame.BorderSizePixel = 0
     ContentFrame.ClipsDescendants = true
+    ContentFrame.ZIndex = 1
     ContentFrame.Parent = MainFrame
     Context.UI.ContentFrame = ContentFrame
 
@@ -233,7 +241,7 @@ return function(Context)
             TweenService:Create(Sidebar, TWEEN.Close, {Size = UDim2.new(0, UI_DIMS.SidebarWidth, 0, 0)}):Play()
             TweenService:Create(ContentFrame, TWEEN.Close, {Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 0, 0)}):Play()
             TweenService:Create(VerticalSeparator, TWEEN.Close, {Size = UDim2.new(0, 1, 0, 0)}):Play()
-            TweenService:Create(BottomSeparator, TWEEN.Close, {Size = UDim2.new(1, 0, 0, 0)}):Play()
+            TweenService:Create(BottomSeparator, TWEEN.Close, {BackgroundTransparency = 1}):Play()
             for _, btn in ipairs(sidebarButtons) do
                 TweenService:Create(btn, TWEEN.Close, {TextTransparency = 1}):Play()
             end
@@ -256,10 +264,10 @@ return function(Context)
             end)
             TweenService:Create(MainFrame, TWEEN.Open, {Size = UDim2.new(0, UI_DIMS.MainWidth, 0, UI_DIMS.MainHeight)}):Play()
             task.delay(0.1, function()
-                TweenService:Create(Sidebar, TWEEN.Open, {Size = UDim2.new(0, UI_DIMS.SidebarWidth, 1, -UI_DIMS.TitleBarHeight)}):Play()
-                TweenService:Create(ContentFrame, TWEEN.Open, {Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -UI_DIMS.TitleBarHeight)}):Play()
-                TweenService:Create(VerticalSeparator, TWEEN.Open, {Size = UDim2.new(0, 1, 1, -UI_DIMS.TitleBarHeight)}):Play()
-                TweenService:Create(BottomSeparator, TWEEN.Open, {Size = UDim2.new(1, 0, 0, 1)}):Play()
+                TweenService:Create(Sidebar, TWEEN.Open, {Size = UDim2.new(0, UI_DIMS.SidebarWidth, 1, -(UI_DIMS.TitleBarHeight + 1))}):Play()
+                TweenService:Create(ContentFrame, TWEEN.Open, {Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -(UI_DIMS.TitleBarHeight + 1))}):Play()
+                TweenService:Create(VerticalSeparator, TWEEN.Open, {Size = UDim2.new(0, 1, 1, -(UI_DIMS.TitleBarHeight + 1))}):Play()
+                TweenService:Create(BottomSeparator, TWEEN.Open, {BackgroundTransparency = 0}):Play()
                 for _, btn in ipairs(sidebarButtons) do
                     TweenService:Create(btn, TWEEN.Open, {TextTransparency = 0}):Play()
                 end
@@ -402,7 +410,7 @@ return function(Context)
 
         task.delay(0.5, function()
             TweenService:Create(ContentFrame, TWEEN.Open, {
-                Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -UI_DIMS.TitleBarHeight)
+                Size = UDim2.new(1, -(UI_DIMS.SidebarWidth + 1), 1, -(UI_DIMS.TitleBarHeight + 1))
             }):Play()
         end)
     end
