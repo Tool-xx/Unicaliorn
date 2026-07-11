@@ -5,17 +5,15 @@
 return function(Context)
     local TweenService = Context.Services.TweenService
     local UserInputService = Context.Services.UserInputService
-    local RunService = Context.Services.RunService
     local Config = Context.Config
     local COLORS = Config.COLORS
     local TWEEN = Config.TWEEN
     local FeatureState = Context.FeatureState
-    local Components = Context.UI.Components
 
     local Plugins = {}
 
     -- ============================================================
-    -- SYNTAX HIGHLIGHTER DATA
+    -- SYNTAX HIGHLIGHTER
     -- ============================================================
     local LUA_KEYWORDS = {
         ["and"] = true, ["break"] = true, ["do"] = true, ["else"] = true,
@@ -23,21 +21,18 @@ return function(Context)
         ["function"] = true, ["if"] = true, ["in"] = true, ["local"] = true,
         ["nil"] = true, ["not"] = true, ["or"] = true, ["repeat"] = true,
         ["return"] = true, ["then"] = true, ["true"] = true, ["until"] = true,
-        ["while"] = true, ["continue"] = true,
+        ["while"] = true,
     }
 
     local SYNTAX_COLORS = {
-        keyword   = Color3.fromRGB(255, 120, 180),  -- pink
-        string    = Color3.fromRGB(150, 255, 150),  -- green
-        comment   = Color3.fromRGB(120, 120, 120),  -- gray
-        number    = Color3.fromRGB(150, 200, 255),  -- blue
-        operator  = Color3.fromRGB(255, 200, 100),  -- orange
-        default   = Color3.fromRGB(220, 220, 220),  -- white
+        keyword   = Color3.fromRGB(255, 120, 180),
+        string    = Color3.fromRGB(150, 255, 150),
+        comment   = Color3.fromRGB(120, 120, 120),
+        number    = Color3.fromRGB(150, 200, 255),
+        operator  = Color3.fromRGB(255, 200, 100),
+        default   = Color3.fromRGB(220, 220, 220),
     }
 
-    -- ============================================================
-    -- TOKENIZE CODE FOR SYNTAX HIGHLIGHTING
-    -- ============================================================
     local function tokenizeCode(code)
         local tokens = {}
         local i = 1
@@ -49,29 +44,9 @@ return function(Context)
             -- Comments
             if c == "-" and code:sub(i+1, i+1) == "-" then
                 local start = i
-                if code:sub(i+2, i+2) == "[" then
-                    -- Long comment
-                    local eqCount = 0
-                    i = i + 3
-                    while code:sub(i, i) == "=" do
-                        eqCount = eqCount + 1
-                        i = i + 1
-                    end
-                    if code:sub(i, i) == "[" then
-                        i = i + 1
-                        local closePattern = "]" .. string.rep("=", eqCount) .. "]"
-                        local closePos = code:find(closePattern, i, true)
-                        if closePos then
-                            i = closePos + #closePattern
-                        else
-                            i = len + 1
-                        end
-                    end
-                else
-                    -- Short comment
-                    while i <= len and code:sub(i, i) ~= "\n" do
-                        i = i + 1
-                    end
+                i = i + 2
+                while i <= len and code:sub(i, i) ~= "\n" do
+                    i = i + 1
                 end
                 table.insert(tokens, {type = "comment", text = code:sub(start, i - 1)})
 
@@ -93,35 +68,11 @@ return function(Context)
                 end
                 table.insert(tokens, {type = "string", text = code:sub(start, i - 1)})
 
-            -- Long strings [[ ]]
-            elseif c == "[" and (code:sub(i+1, i+1) == "[" or code:sub(i+1, i+1) == "=") then
-                local start = i
-                local eqCount = 0
-                i = i + 2
-                while code:sub(i, i) == "=" do
-                    eqCount = eqCount + 1
-                    i = i + 1
-                end
-                if code:sub(i, i) == "[" then
-                    i = i + 1
-                    local closePattern = "]" .. string.rep("=", eqCount) .. "]"
-                    local closePos = code:find(closePattern, i, true)
-                    if closePos then
-                        i = closePos + #closePattern
-                    else
-                        i = len + 1
-                    end
-                    table.insert(tokens, {type = "string", text = code:sub(start, i - 1)})
-                else
-                    table.insert(tokens, {type = "operator", text = "["})
-                    i = start + 1
-                end
-
             -- Numbers
-            elseif c:match("%d") or (c == "." and code:sub(i+1, i+1):match("%d")) then
+            elseif c:match("%d") then
                 local start = i
                 i = i + 1
-                while i <= len and (code:sub(i, i):match("[%d%.%xXaAbBcCdDeEfF%+%-]") or code:sub(i, i) == "_") do
+                while i <= len and code:sub(i, i):match("[%d%.%xXaAbBcCdDeEfF]") do
                     i = i + 1
                 end
                 table.insert(tokens, {type = "number", text = code:sub(start, i - 1)})
@@ -149,7 +100,7 @@ return function(Context)
                 end
                 table.insert(tokens, {type = "operator", text = code:sub(start, i - 1)})
 
-            -- Whitespace / Newlines
+            -- Whitespace
             elseif c:match("%s") then
                 local start = i
                 i = i + 1
@@ -158,7 +109,7 @@ return function(Context)
                 end
                 table.insert(tokens, {type = "whitespace", text = code:sub(start, i - 1)})
 
-            -- Other characters
+            -- Other
             else
                 table.insert(tokens, {type = "default", text = c})
                 i = i + 1
@@ -168,11 +119,7 @@ return function(Context)
         return tokens
     end
 
-    -- ============================================================
-    -- RENDER SYNTAX HIGHLIGHTED TEXT
-    -- ============================================================
     local function renderHighlightedText(container, code, lineNumbersContainer)
-        -- Clear existing
         for _, child in ipairs(container:GetChildren()) do
             if child:IsA("TextLabel") or child:IsA("Frame") then
                 child:Destroy()
@@ -217,7 +164,6 @@ return function(Context)
         local padding = 4
 
         for lineIdx, lineTokens in ipairs(lines) do
-            -- Line number
             if lineNumbersContainer then
                 local numLabel = Instance.new("TextLabel")
                 numLabel.Size = UDim2.new(1, 0, 0, lineHeight)
@@ -231,7 +177,6 @@ return function(Context)
                 numLabel.Parent = lineNumbersContainer
             end
 
-            -- Line background
             local lineBg = Instance.new("Frame")
             lineBg.Size = UDim2.new(1, 0, 0, lineHeight)
             lineBg.Position = UDim2.new(0, 0, 0, (lineIdx - 1) * lineHeight)
@@ -241,7 +186,7 @@ return function(Context)
 
             local xOffset = padding
             for _, token in ipairs(lineTokens) do
-                if token.type ~= "whitespace" or token.text:match("[^%s]") then
+                if token.type ~= "whitespace" then
                     local label = Instance.new("TextLabel")
                     label.Size = UDim2.new(0, 0, 0, lineHeight)
                     label.Position = UDim2.new(0, xOffset, 0, 0)
@@ -255,7 +200,6 @@ return function(Context)
                     label.Parent = lineBg
                     xOffset = xOffset + label.TextBounds.X
                 else
-                    -- Count spaces
                     local spaces = 0
                     for _ in token.text:gmatch(" ") do
                         spaces = spaces + 1
@@ -269,7 +213,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- STOP PLUGIN
+    -- PLUGIN MANAGEMENT
     -- ============================================================
     local function stopPlugin(name)
         if FeatureState.pluginRunningThreads[name] then
@@ -278,7 +222,7 @@ return function(Context)
             end)
             FeatureState.pluginRunningThreads[name] = nil
         end
-        for i, plugin in ipairs(FeatureState.plugins) do
+        for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
                 plugin.enabled = false
                 break
@@ -287,9 +231,6 @@ return function(Context)
         print("[Plugins] Stopped: " .. name)
     end
 
-    -- ============================================================
-    -- RUN PLUGIN
-    -- ============================================================
     local function runPlugin(name, code)
         stopPlugin(name)
 
@@ -303,7 +244,6 @@ return function(Context)
 
         if not success then
             warn("[Plugins] Error running '" .. name .. "': " .. tostring(err))
-            -- Show error notification
             local ScreenGui = Context.UI.ScreenGui
             if ScreenGui then
                 local errNotif = Instance.new("Frame")
@@ -336,7 +276,7 @@ return function(Context)
             return false
         end
 
-        for i, plugin in ipairs(FeatureState.plugins) do
+        for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
                 plugin.enabled = true
                 break
@@ -346,11 +286,7 @@ return function(Context)
         return true
     end
 
-    -- ============================================================
-    -- ADD PLUGIN
-    -- ============================================================
     function Plugins.Add(name, code)
-        -- Check for duplicate names
         for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
                 return false, "Plugin with this name already exists"
@@ -363,16 +299,11 @@ return function(Context)
             enabled = false,
         })
 
-        -- Add to binds
         FeatureState.binds[name] = nil
-
         print("[Plugins] Added: " .. name)
         return true
     end
 
-    -- ============================================================
-    -- UPDATE PLUGIN
-    -- ============================================================
     function Plugins.Update(oldName, newName, newCode)
         local plugin = nil
         local idx = nil
@@ -387,19 +318,16 @@ return function(Context)
             return false, "Plugin not found"
         end
 
-        -- If name changed, check for duplicates
         if newName ~= oldName then
             for _, p in ipairs(FeatureState.plugins) do
                 if p.name == newName then
                     return false, "Plugin with this name already exists"
                 end
             end
-            -- Update bind
             FeatureState.binds[newName] = FeatureState.binds[oldName]
             FeatureState.binds[oldName] = nil
         end
 
-        -- Stop if running
         if plugin.enabled then
             stopPlugin(oldName)
         end
@@ -412,9 +340,6 @@ return function(Context)
         return true
     end
 
-    -- ============================================================
-    -- DELETE PLUGIN
-    -- ============================================================
     function Plugins.Delete(name)
         for i, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
@@ -430,16 +355,10 @@ return function(Context)
         return false
     end
 
-    -- ============================================================
-    -- GET ALL PLUGINS
-    -- ============================================================
     function Plugins.GetAll()
         return FeatureState.plugins
     end
 
-    -- ============================================================
-    -- TOGGLE PLUGIN
-    -- ============================================================
     function Plugins.Toggle(name)
         for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
@@ -454,9 +373,6 @@ return function(Context)
         return false
     end
 
-    -- ============================================================
-    -- IS PLUGIN RUNNING
-    -- ============================================================
     function Plugins.IsRunning(name)
         for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
@@ -466,9 +382,6 @@ return function(Context)
         return false
     end
 
-    -- ============================================================
-    -- EXECUTE PLUGIN BY BIND
-    -- ============================================================
     function Plugins.ExecuteByBind(name)
         for _, plugin in ipairs(FeatureState.plugins) do
             if plugin.name == name then
@@ -484,7 +397,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- OPEN PLUGIN EDITOR
+    -- EDITOR WINDOW
     -- ============================================================
     function Plugins.OpenEditor(editPluginName, editPluginCode, onSaveCallback)
         if Context.State.pluginEditorOpen then return end
@@ -570,7 +483,7 @@ return function(Context)
         lineNumbers.ZIndex = 202
         lineNumbers.Parent = window
 
-        -- Code container (for highlighted text)
+        -- Code container
         local codeContainer = Instance.new("Frame")
         codeContainer.Size = UDim2.new(1, -45, 1, -77)
         codeContainer.Position = UDim2.new(0, 45, 0, 33)
@@ -590,7 +503,7 @@ return function(Context)
         codeScroll.ZIndex = 203
         codeScroll.Parent = codeContainer
 
-        -- Hidden text box for input (captures all keyboard input)
+        -- Hidden text box for input
         local inputBox = Instance.new("TextBox")
         inputBox.Size = UDim2.new(1, 0, 1, 0)
         inputBox.Position = UDim2.new(0, 0, 0, 0)
@@ -607,7 +520,6 @@ return function(Context)
         inputBox.ZIndex = 210
         inputBox.Parent = codeScroll
 
-        -- Render initial highlighted text
         local function refreshHighlight()
             local contentHeight = renderHighlightedText(codeScroll, inputBox.Text, lineNumbers)
             codeScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(contentHeight, codeScroll.AbsoluteSize.Y + 50))
@@ -694,7 +606,7 @@ return function(Context)
         statusLabel.ZIndex = 203
         statusLabel.Parent = bottomBar
 
-        -- Drag functionality for title bar
+        -- Drag
         local dragConn1, dragConn2, dragConn3
         local dragging, dragStart, startPos
 
@@ -761,7 +673,6 @@ return function(Context)
             end
         end)
 
-        -- Close function
         local function closeEditor()
             Context.State.pluginEditorOpen = false
             FeatureState.pluginEditorWindow = nil
@@ -786,7 +697,6 @@ return function(Context)
                 return
             end
 
-            -- Open name prompt
             Plugins.OpenNamePrompt(isEditing and editPluginName or nil, function(name)
                 if not name or name == "" then
                     statusLabel.Text = "Error: Name is required"
@@ -815,13 +725,12 @@ return function(Context)
 
         FeatureState.pluginEditorWindow = window
 
-        -- Animate in
         window.BackgroundTransparency = 1
         TweenService:Create(window, TWEEN.Appear, {BackgroundTransparency = 0}):Play()
     end
 
     -- ============================================================
-    -- OPEN NAME PROMPT
+    -- NAME PROMPT
     -- ============================================================
     function Plugins.OpenNamePrompt(defaultName, onConfirm)
         if Context.State.pluginNamePromptOpen then return end
@@ -889,7 +798,6 @@ return function(Context)
         errorLabel.ZIndex = 302
         errorLabel.Parent = promptWindow
 
-        -- Save button
         local confirmBtn = Instance.new("TextButton")
         confirmBtn.Size = UDim2.new(0, 90, 0, 28)
         confirmBtn.Position = UDim2.new(0, 10, 1, -38)
@@ -911,7 +819,6 @@ return function(Context)
             TweenService:Create(confirmBtn, TWEEN.Hover, {BackgroundColor3 = Color3.fromRGB(0, 120, 60)}):Play()
         end)
 
-        -- Cancel button
         local cancelBtn = Instance.new("TextButton")
         cancelBtn.Size = UDim2.new(0, 90, 0, 28)
         cancelBtn.Position = UDim2.new(0, 110, 1, -38)
@@ -953,7 +860,6 @@ return function(Context)
             end
         end)
 
-        -- Enter key to confirm
         nameInput.FocusLost:Connect(function(enterPressed)
             if enterPressed then
                 confirmBtn.MouseButton1Click:Fire()
@@ -962,16 +868,14 @@ return function(Context)
 
         FeatureState.pluginNamePromptWindow = promptWindow
 
-        -- Animate in
         promptWindow.BackgroundTransparency = 1
         TweenService:Create(promptWindow, TWEEN.Appear, {BackgroundTransparency = 0}):Play()
     end
 
     -- ============================================================
-    -- REFRESH PLUGIN LIST UI (called by Misc tab)
+    -- REFRESH PLUGIN LIST UI
     -- ============================================================
     function Plugins.RefreshListUI(listFrame, onListChanged)
-        -- Clear existing
         for _, child in ipairs(listFrame:GetChildren()) do
             if child:IsA("Frame") then
                 child:Destroy()
@@ -989,7 +893,6 @@ return function(Context)
             row.BorderColor3 = COLORS.Border
             row.Parent = listFrame
 
-            -- Name label
             local nameLabel = Instance.new("TextLabel")
             nameLabel.Size = UDim2.new(1, -130, 1, 0)
             nameLabel.Position = UDim2.new(0, 8, 0, 0)
@@ -1002,14 +905,13 @@ return function(Context)
             nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
             nameLabel.Parent = row
 
-            -- Edit button (✎)
             local editBtn = Instance.new("TextButton")
             editBtn.Size = UDim2.new(0, 28, 0, 24)
             editBtn.Position = UDim2.new(1, -90, 0.5, -12)
             editBtn.BackgroundColor3 = COLORS.Background
             editBtn.BorderSizePixel = 1
             editBtn.BorderColor3 = COLORS.Border
-            editBtn.Text = "✎"
+            editBtn.Text = "\u{270E}"
             editBtn.TextColor3 = Color3.fromRGB(150, 200, 255)
             editBtn.TextSize = 14
             editBtn.Font = Enum.Font.GothamBold
@@ -1027,14 +929,13 @@ return function(Context)
                 Plugins.OpenEditor(plugin.name, plugin.code, onListChanged)
             end)
 
-            -- Delete button (✕)
             local deleteBtn = Instance.new("TextButton")
             deleteBtn.Size = UDim2.new(0, 28, 0, 24)
             deleteBtn.Position = UDim2.new(1, -60, 0.5, -12)
             deleteBtn.BackgroundColor3 = COLORS.Background
             deleteBtn.BorderSizePixel = 1
             deleteBtn.BorderColor3 = COLORS.Border
-            deleteBtn.Text = "✕"
+            deleteBtn.Text = "\u{2715}"
             deleteBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
             deleteBtn.TextSize = 14
             deleteBtn.Font = Enum.Font.GothamBold
@@ -1055,7 +956,6 @@ return function(Context)
                 end
             end)
 
-            -- Toggle button
             local toggleBg = Instance.new("TextButton")
             toggleBg.Size = UDim2.new(0, 44, 0, 20)
             toggleBg.Position = UDim2.new(1, -52, 0.5, -10)
@@ -1090,9 +990,6 @@ return function(Context)
         return yOff + 5
     end
 
-    -- ============================================================
-    -- CLEANUP ON DESTROY
-    -- ============================================================
     function Plugins.Cleanup()
         for name, _ in pairs(FeatureState.pluginRunningThreads) do
             stopPlugin(name)
