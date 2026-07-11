@@ -164,8 +164,8 @@ return {
         bindGlobalConnection = nil,
 
         -- Plugins
-        plugins = {},           -- { name = string, code = string, enabled = boolean }
-        pluginRunningThreads = {}, -- { [name] = thread }
+        plugins = {},
+        pluginRunningThreads = {},
         pluginEditorWindow = nil,
         pluginNamePromptWindow = nil,
     },
