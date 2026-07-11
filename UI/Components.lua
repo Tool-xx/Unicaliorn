@@ -1,5 +1,5 @@
 -- UI/Components.lua
--- Reusable UI components: toggle, slider, button, color menu, window drag
+-- Reusable UI components: toggle, slider, button, color menu, window drag, bind button
 -- Receives Context, populates Context.UI.Components
 
 return function(Context)
@@ -268,7 +268,6 @@ return function(Context)
         local absSize = anchorButton.AbsoluteSize
         menuFrame.Position = UDim2.new(0, absPos.X + absSize.X + 5, 0, absPos.Y)
 
-        -- Close button (X)
         local closeBtn = Instance.new("TextButton")
         closeBtn.Name = "CloseBtn"
         closeBtn.Size = UDim2.new(0, 20, 0, 20)
@@ -286,7 +285,6 @@ return function(Context)
         local closeConn = closeBtn.MouseButton1Click:Connect(closeColorMenu)
         table.insert(Context.State.colorMenuConnections, closeConn)
 
-        -- Title
         local titleLabel = Instance.new("TextLabel")
         titleLabel.Size = UDim2.new(1, -25, 0, 20)
         titleLabel.Position = UDim2.new(0, 5, 0, 2)
@@ -299,7 +297,6 @@ return function(Context)
         titleLabel.ZIndex = 101
         titleLabel.Parent = menuFrame
 
-        -- Color options
         for i, option in ipairs(Config.COLOR_OPTIONS) do
             local colorBtn = Instance.new("TextButton")
             colorBtn.Size = UDim2.new(0, 30, 0, 30)
@@ -333,7 +330,6 @@ return function(Context)
             end)
         end
 
-        -- Click outside to close
         local clickOutsideConn = UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 local mousePos = UserInputService:GetMouseLocation()
@@ -407,7 +403,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- SETUP HOVER EFFECT (for sidebar buttons, minimize, close)
+    -- SETUP HOVER EFFECT
     -- ============================================================
     function Components.setupHoverEffect(button, activeButtonRef)
         button.MouseEnter:Connect(function()
@@ -433,7 +429,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- MAKE DRAGGABLE (legacy alias for MainFrame drag)
+    -- MAKE DRAGGABLE (legacy alias)
     -- ============================================================
     function Components.makeDraggable(frame, dragPart)
         local dragging, dragInput, dragStart, startPos
@@ -464,7 +460,7 @@ return function(Context)
     end
 
     -- ============================================================
-    -- TOGGLE WITH GEAR (for Visual tab ESP settings)
+    -- TOGGLE WITH GEAR
     -- ============================================================
     function Components.createToggleWithGear(parent, yPos, labelText, defaultColor, toggleCallback, colorCallback)
         local row = Instance.new("Frame")
@@ -485,7 +481,6 @@ return function(Context)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = row
 
-        -- Toggle
         local toggleBg = Instance.new("TextButton")
         toggleBg.Size = UDim2.new(0, 50, 0, 22)
         toggleBg.Position = UDim2.new(1, -105, 0.5, -11)
@@ -516,7 +511,6 @@ return function(Context)
             if toggleCallback then toggleCallback(enabled) end
         end)
 
-        -- Gear icon button
         local gearBtn = Instance.new("TextButton")
         gearBtn.Size = UDim2.new(0, 24, 0, 24)
         gearBtn.Position = UDim2.new(1, -30, 0.5, -12)
@@ -544,6 +538,162 @@ return function(Context)
         end)
 
         return row
+    end
+
+    -- ============================================================
+    -- CREATE BIND BUTTON
+    -- ============================================================
+    function Components.createBindButton(parent, yPos, functionName, defaultBind, onBindSet, onBindClear)
+        local row = Instance.new("Frame")
+        row.Name = "BindRow_" .. functionName
+        row.Size = UDim2.new(1, -10, 0, 30)
+        row.Position = UDim2.new(0, 5, 0, yPos)
+        row.BackgroundColor3 = COLORS.Background
+        row.BorderSizePixel = 0
+        row.Parent = parent
+
+        -- Function name label
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -180, 1, 0)
+        nameLabel.Position = UDim2.new(0, 5, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = functionName
+        nameLabel.TextColor3 = COLORS.Text
+        nameLabel.TextSize = 13
+        nameLabel.Font = Enum.Font.Gotham
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = row
+
+        -- Trash/Clear button (X)
+        local clearBtn = Instance.new("TextButton")
+        clearBtn.Name = "ClearBtn"
+        clearBtn.Size = UDim2.new(0, 26, 0, 22)
+        clearBtn.Position = UDim2.new(1, -180, 0.5, -11)
+        clearBtn.BackgroundColor3 = COLORS.Background
+        clearBtn.BorderSizePixel = 1
+        clearBtn.BorderColor3 = COLORS.Border
+        clearBtn.Text = "✕"
+        clearBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+        clearBtn.TextSize = 12
+        clearBtn.Font = Enum.Font.GothamBold
+        clearBtn.AutoButtonColor = false
+        clearBtn.Parent = row
+
+        clearBtn.MouseEnter:Connect(function()
+            TweenService:Create(clearBtn, TWEEN.Hover, {BackgroundColor3 = COLORS.ButtonHover}):Play()
+        end)
+        clearBtn.MouseLeave:Connect(function()
+            TweenService:Create(clearBtn, TWEEN.Hover, {BackgroundColor3 = COLORS.Background}):Play()
+        end)
+
+        -- Bind button
+        local bindBtn = Instance.new("TextButton")
+        bindBtn.Name = "BindBtn"
+        bindBtn.Size = UDim2.new(0, 140, 0, 22)
+        bindBtn.Position = UDim2.new(1, -148, 0.5, -11)
+        bindBtn.BackgroundColor3 = COLORS.Background
+        bindBtn.BorderSizePixel = 1
+        bindBtn.BorderColor3 = COLORS.Border
+        bindBtn.Text = defaultBind or "Click for bind"
+        bindBtn.TextColor3 = COLORS.Text
+        bindBtn.TextSize = 11
+        bindBtn.Font = Enum.Font.Gotham
+        bindBtn.AutoButtonColor = false
+        bindBtn.Parent = row
+
+        bindBtn.MouseEnter:Connect(function()
+            if Context.State.bindListening ~= functionName then
+                TweenService:Create(bindBtn, TWEEN.Hover, {BackgroundColor3 = COLORS.ButtonHover}):Play()
+            end
+        end)
+        bindBtn.MouseLeave:Connect(function()
+            if Context.State.bindListening ~= functionName then
+                TweenService:Create(bindBtn, TWEEN.Hover, {BackgroundColor3 = COLORS.Background}):Play()
+            end
+        end)
+
+        -- Update display based on current state
+        local function updateDisplay()
+            local bind = Context.FeatureState.binds[functionName]
+            if Context.State.bindListening == functionName then
+                bindBtn.Text = "Click!"
+                bindBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
+                bindBtn.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
+            elseif bind then
+                bindBtn.Text = bind.Name
+                bindBtn.TextColor3 = COLORS.Text
+                bindBtn.BackgroundColor3 = COLORS.Background
+            else
+                bindBtn.Text = "Click for bind"
+                bindBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+                bindBtn.BackgroundColor3 = COLORS.Background
+            end
+        end
+
+        -- Click to start/cancel listening
+        bindBtn.MouseButton1Click:Connect(function()
+            if Context.State.bindListening == functionName then
+                -- Cancel listening
+                Context.State.bindListening = nil
+                if Context.State.bindInputConnection then
+                    Context.State.bindInputConnection:Disconnect()
+                    Context.State.bindInputConnection = nil
+                end
+            else
+                -- Cancel previous listener if any
+                if Context.State.bindInputConnection then
+                    Context.State.bindInputConnection:Disconnect()
+                    Context.State.bindInputConnection = nil
+                end
+                Context.State.bindListening = functionName
+                
+                Context.State.bindInputConnection = UserInputService.InputBegan:Connect(function(input, processed)
+                    if processed then return end
+                    if input.UserInputType == Enum.UserInputType.Keyboard then
+                        Context.FeatureState.binds[functionName] = input.KeyCode
+                        Context.State.bindListening = nil
+                        if Context.State.bindInputConnection then
+                            Context.State.bindInputConnection:Disconnect()
+                            Context.State.bindInputConnection = nil
+                        end
+                        if onBindSet then onBindSet(input.KeyCode) end
+                        -- Refresh all bind displays via callback registry
+                        if Context.UI.Components._bindRefreshCallbacks then
+                            for _, cb in ipairs(Context.UI.Components._bindRefreshCallbacks) do
+                                pcall(cb)
+                            end
+                        end
+                    end
+                end)
+            end
+            updateDisplay()
+        end)
+
+        -- Clear bind
+        clearBtn.MouseButton1Click:Connect(function()
+            Context.FeatureState.binds[functionName] = nil
+            if Context.State.bindListening == functionName then
+                Context.State.bindListening = nil
+                if Context.State.bindInputConnection then
+                    Context.State.bindInputConnection:Disconnect()
+                    Context.State.bindInputConnection = nil
+                end
+            end
+            if onBindClear then onBindClear() end
+            updateDisplay()
+        end)
+
+        -- Register refresh callback
+        if not Context.UI.Components._bindRefreshCallbacks then
+            Context.UI.Components._bindRefreshCallbacks = {}
+        end
+        table.insert(Context.UI.Components._bindRefreshCallbacks, updateDisplay)
+
+        return {
+            row = row,
+            updateDisplay = updateDisplay,
+            getBind = function() return Context.FeatureState.binds[functionName] end,
+        }
     end
 
     -- ============================================================
