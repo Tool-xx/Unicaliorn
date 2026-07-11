@@ -1,7 +1,4 @@
--- Features/Speedhack.lua
--- Speedhack feature: modifies WalkSpeed with auto-apply on respawn
--- Receives Context, returns Feature table
-
+-- Features/Speedhack.lua (DEBUG VERSION)
 return function(Context)
     local FeatureState = Context.FeatureState
     local LocalPlayer = Context.LocalPlayer
@@ -10,127 +7,76 @@ return function(Context)
 
     local Speedhack = {}
 
-    -- ============================================================
-    -- APPLY SPEED TO CURRENT CHARACTER (с retry)
-    -- ============================================================
     local function applySpeed(speed)
         local char = LocalPlayer.Character
-        if not char then return false end
+        print("[Speedhack DEBUG] applySpeed called, speed=" .. speed .. ", char=" .. tostring(char))
+        
+        if not char then 
+            print("[Speedhack DEBUG] No character!")
+            return false 
+        end
         
         local hum = char:FindFirstChildOfClass("Humanoid")
+        print("[Speedhack DEBUG] hum=" .. tostring(hum) .. ", hum.WalkSpeed=" .. (hum and tostring(hum.WalkSpeed) or "N/A"))
+        
         if not hum then
-            -- Пробуем подождать Humanoid если персонаж только что заспавнился
             hum = char:WaitForChild("Humanoid", 2)
+            print("[Speedhack DEBUG] After WaitForChild, hum=" .. tostring(hum))
             if not hum then return false end
         end
         
         hum.WalkSpeed = speed
+        print("[Speedhack DEBUG] Set WalkSpeed to " .. speed .. ", actual=" .. hum.WalkSpeed)
         return true
     end
 
-    -- ============================================================
-    -- FORCE APPLY (с задержкой для обхода race condition)
-    -- ============================================================
-    local function forceApplySpeed(speed, retries)
-        retries = retries or 3
-        local applied = applySpeed(speed)
-        
-        if not applied and retries > 0 then
-            task.delay(0.1, function()
-                if FeatureState.speedhackEnabled then
-                    forceApplySpeed(speed, retries - 1)
-                end
-            end)
-            return
-        end
-        
-        -- Двойная проверка: Roblox иногда сбрасывает WalkSpeed после CharacterAdded
-        if applied then
-            task.delay(0.05, function()
-                local char = LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum and hum.WalkSpeed ~= speed and FeatureState.speedhackEnabled then
-                    hum.WalkSpeed = speed
-                end
-            end)
-        end
-    end
-
-    -- ============================================================
-    -- ENABLE SPEEDHACK
-    -- ============================================================
     function Speedhack.Enable()
+        print("[Speedhack DEBUG] Enable called, speedhackEnabled=" .. tostring(FeatureState.speedhackEnabled))
         if FeatureState.speedhackEnabled then return end
         FeatureState.speedhackEnabled = true
-        print("[Speedhack] Enabled (" .. FeatureState.speedhackSpeed .. ")")
         
-        -- Применяем к текущему персонажу с retry
-        forceApplySpeed(FeatureState.speedhackSpeed)
+        local ok = applySpeed(FeatureState.speedhackSpeed)
+        print("[Speedhack DEBUG] First applySpeed result=" .. tostring(ok))
 
-        -- Коннекшен на респавн
         FeatureState.speedhackCharConnection = LocalPlayer.CharacterAdded:Connect(function(char)
-            if not FeatureState.speedhackEnabled then return end
-            
-            -- Ждём Humanoid с таймаутом
-            local hum = char:WaitForChild("Humanoid", 5)
-            if not hum then
-                warn("[Speedhack] Humanoid not found after respawn")
-                return
+            print("[Speedhack DEBUG] CharacterAdded fired, char=" .. tostring(char))
+            if not FeatureState.speedhackEnabled then 
+                print("[Speedhack DEBUG] Disabled, ignoring")
+                return 
             end
             
-            -- Применяем с задержкой, чтобы обойти Roblox reset
-            task.delay(0.1, function()
-                if FeatureState.speedhackEnabled and hum and hum.Parent then
-                    hum.WalkSpeed = FeatureState.speedhackSpeed
-                    
-                    -- Дополнительная проверка через кадр
-                    RunService.Heartbeat:Wait()
-                    if FeatureState.speedhackEnabled and hum and hum.Parent 
-                       and hum.WalkSpeed ~= FeatureState.speedhackSpeed then
-                        hum.WalkSpeed = FeatureState.speedhackSpeed
-                    end
-                end
+            task.delay(0.15, function()
+                print("[Speedhack DEBUG] Delayed apply, speed=" .. FeatureState.speedhackSpeed)
+                applySpeed(FeatureState.speedhackSpeed)
             end)
         end)
     end
 
-    -- ============================================================
-    -- DISABLE SPEEDHACK
-    -- ============================================================
     function Speedhack.Disable()
+        print("[Speedhack DEBUG] Disable called")
         if not FeatureState.speedhackEnabled then return end
         FeatureState.speedhackEnabled = false
-        print("[Speedhack] Disabled")
-        
         if FeatureState.speedhackCharConnection then
             FeatureState.speedhackCharConnection:Disconnect()
             FeatureState.speedhackCharConnection = nil
         end
-        
         applySpeed(Config.DEFAULTS.WalkSpeed)
     end
 
-    -- ============================================================
-    -- SET SPEED VALUE
-    -- ============================================================
     function Speedhack.SetSpeed(value)
+        print("[Speedhack DEBUG] SetSpeed called, value=" .. value)
         FeatureState.speedhackSpeed = value
         if FeatureState.speedhackEnabled then
             applySpeed(value)
         end
     end
 
-    -- ============================================================
-    -- GET SPEED VALUE
-    -- ============================================================
     function Speedhack.GetSpeed()
         return FeatureState.speedhackSpeed
     end
 
-    -- ============================================================
-    -- TOGGLE
-    -- ============================================================
     function Speedhack.Toggle()
+        print("[Speedhack DEBUG] Toggle called")
         if FeatureState.speedhackEnabled then
             Speedhack.Disable()
             return false
@@ -140,13 +86,10 @@ return function(Context)
         end
     end
 
-    -- ============================================================
-    -- IS ENABLED
-    -- ============================================================
     function Speedhack.IsEnabled()
         return FeatureState.speedhackEnabled
     end
 
-    print("[Feature] Speedhack module loaded.")
+    print("[Feature] Speedhack module loaded (DEBUG).")
     return Speedhack
 end
