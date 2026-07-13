@@ -295,28 +295,19 @@ return function(Context)
     bindsToggleBtn.AutoButtonColor = false
     bindsToggleBtn.Parent = bindsHeader
 
-    -- Binds Frame (collapsible)
-    local bindsFrame = Instance.new("Frame")
-    bindsFrame.Name = "Binds_Settings"
-    bindsFrame.Size = UDim2.new(1, -20, 0, 0)
-    bindsFrame.Position = UDim2.new(0, 10, 0, 175)
-    bindsFrame.BackgroundColor3 = COLORS.Background
-    bindsFrame.BorderSizePixel = 1
-    bindsFrame.BorderColor3 = COLORS.Border
-    bindsFrame.ClipsDescendants = true
-    bindsFrame.Visible = true
-    bindsFrame.Parent = content
-
-    -- Bind rows container
+    -- Binds ScrollFrame (directly in content, no extra Frame wrapper)
     local bindsScroll = Instance.new("ScrollingFrame")
     bindsScroll.Name = "BindsScroll"
-    bindsScroll.Size = UDim2.new(1, 0, 1, 0)
-    bindsScroll.BackgroundTransparency = 1
-    bindsScroll.BorderSizePixel = 0
+    bindsScroll.Size = UDim2.new(1, -20, 0, 0)
+    bindsScroll.Position = UDim2.new(0, 10, 0, 175)
+    bindsScroll.BackgroundColor3 = COLORS.Background
+    bindsScroll.BorderSizePixel = 1
+    bindsScroll.BorderColor3 = COLORS.Border
     bindsScroll.ScrollBarThickness = 4
     bindsScroll.ScrollBarImageColor3 = COLORS.Border
     bindsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    bindsScroll.Parent = bindsFrame
+    bindsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    bindsScroll.Parent = content
 
     -- ============================================================
     -- REFRESH BIND LIST
@@ -341,7 +332,6 @@ return function(Context)
 
     local function formatKeyName(key)
         if not key then return "None" end
-        -- If stored as Enum.KeyCode or string
         if typeof(key) == "EnumItem" then
             return key.Name
         elseif type(key) == "string" then
@@ -362,27 +352,19 @@ return function(Context)
     end
 
     local function startListening(editBtn, funcName, keyDisplay)
-        -- Guard: don't allow nested listening
         if Context.State.bindListening then return end
         Context.State.bindListening = true
         editBtn.Text = "Press..."
-        -- Capture single keypress
         listeningConn = UserInputService.InputBegan:Connect(function(input, processed)
             if processed then return end
             if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
             local keyCode = input.KeyCode
-            -- Save bind
             FeatureState.binds[funcName] = keyCode
             stopListening()
             showBindNotification(funcName, true)
-            -- Update display
             keyDisplay.Text = formatKeyName(keyCode)
-            -- minor delay then refresh the UI to ensure consistent ordering/heights
             task.delay(0.05, function() refreshBindList() end)
         end)
-
-        -- Also listen for Escape to cancel
-        listeningConn, listeningConnCancel = listeningConn, listeningConn
     end
 
     local function createBindRow(parent, yOffset, funcName)
@@ -444,25 +426,20 @@ return function(Context)
         unbindBtn.AutoButtonColor = false
         unbindBtn.Parent = row
 
-        -- Edit click -> start listening for next key
         editBtn.MouseButton1Click:Connect(function()
-            -- If currently listening, cancel
             if Context.State.bindListening then
                 stopListening()
                 editBtn.Text = "Edit"
                 keyDisplay.Text = formatKeyName(FeatureState.binds[funcName])
                 return
             end
-
             startListening(editBtn, funcName, keyDisplay)
         end)
 
-        -- Clicking keyDisplay also starts listening
         keyDisplay.MouseButton1Click:Connect(function()
             editBtn.MouseButton1Click:Fire()
         end)
 
-        -- Unbind click
         unbindBtn.MouseButton1Click:Connect(function()
             FeatureState.binds[funcName] = nil
             showBindNotification(funcName, false)
@@ -473,25 +450,21 @@ return function(Context)
     end
 
     function refreshBindList()
-        -- Clear existing rows
         for _, child in ipairs(bindsScroll:GetChildren()) do
             if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("TextLabel") then
                 child:Destroy()
             end
         end
 
-        local rows = {}
-        local added = {} -- set for dedupe
-
-        -- Add builtins first
+        local added = {}
         local y = 4
+
         for _, name in ipairs(builtinFunctions) do
             added[name] = true
             createBindRow(bindsScroll, y, name)
             y = y + 36
         end
 
-        -- Also add any orphan binds that are set but not in builtins
         for name, _ in pairs(FeatureState.binds) do
             if not added[name] then
                 added[name] = true
@@ -510,29 +483,27 @@ return function(Context)
     -- COLLAPSIBLE BEHAVIOR FOR BINDS
     -- ============================================================
     local bindsExpanded = true
+    local BINDS_MAX_HEIGHT = 200  -- max visible height when expanded
 
     local function toggleBinds()
         bindsExpanded = not bindsExpanded
         if bindsExpanded then
-            local targetH = math.max(140, tonumber(bindsScroll.CanvasSize.Y.Offset) or 140)
-            bindsFrame:TweenSize(UDim2.new(1, -20, 0, targetH), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            bindsScroll.Size = UDim2.new(1, -20, 0, BINDS_MAX_HEIGHT)
             bindsToggleBtn.Text = "\u{25B2}"
         else
-            bindsFrame:TweenSize(UDim2.new(1, -20, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            bindsScroll.Size = UDim2.new(1, -20, 0, 0)
             bindsToggleBtn.Text = "\u{25BC}"
         end
     end
 
     bindsToggleBtn.MouseButton1Click:Connect(toggleBinds)
 
-    -- Ensure initial sizes are set after initial content is known
+    -- Set initial size
     task.delay(0.05, function()
-        -- Binds
-        local bH = math.max(140, tonumber(bindsScroll.CanvasSize.Y.Offset) or 140)
-        bindsFrame.Size = UDim2.new(1, -20, 0, bH)
+        bindsScroll.Size = UDim2.new(1, -20, 0, BINDS_MAX_HEIGHT)
     end)
 
-    -- Register tab (ensure Main has register function)
+    -- Register tab
     if Context.UI.Main and Context.UI.Main.registerTabContent then
         Context.UI.Main.registerTabContent("Misc", content)
     end
