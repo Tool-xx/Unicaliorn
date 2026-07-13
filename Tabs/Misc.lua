@@ -371,52 +371,57 @@ return function(Context)
         row.BorderSizePixel = 0
         row.Parent = parent
 
+        -- Function name (left side, flexible width)
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.55, -8, 1, 0)
+        label.Size = UDim2.new(0.28, 0, 1, 0)
         label.Position = UDim2.new(0, 8, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = funcName
         label.TextColor3 = COLORS.Text
-        label.TextSize = 14
+        label.TextSize = 13
         label.Font = Enum.Font.Gotham
         label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextTruncate = Enum.TextTruncate.AtEnd
         label.Parent = row
 
+        -- Key display (anchored from right: -165)
         local keyDisplay = Instance.new("TextButton")
-        keyDisplay.Size = UDim2.new(0, 90, 0, 22)
-        keyDisplay.Position = UDim2.new(0.6, 0, 0.5, -11)
+        keyDisplay.Size = UDim2.new(0, 70, 0, 22)
+        keyDisplay.Position = UDim2.new(1, -165, 0.5, -11)
         keyDisplay.BackgroundColor3 = COLORS.Background
         keyDisplay.BorderSizePixel = 1
         keyDisplay.BorderColor3 = COLORS.Border
         keyDisplay.Text = formatKeyName(FeatureState.binds[funcName])
         keyDisplay.TextColor3 = COLORS.Text
-        keyDisplay.TextSize = 12
+        keyDisplay.TextSize = 11
         keyDisplay.Font = Enum.Font.GothamBold
         keyDisplay.AutoButtonColor = false
         keyDisplay.Parent = row
 
+        -- Edit button (anchored from right: -90)
         local editBtn = Instance.new("TextButton")
-        editBtn.Size = UDim2.new(0, 50, 0, 22)
-        editBtn.Position = UDim2.new(0.6, 100, 0.5, -11)
+        editBtn.Size = UDim2.new(0, 42, 0, 22)
+        editBtn.Position = UDim2.new(1, -90, 0.5, -11)
         editBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         editBtn.BorderSizePixel = 1
         editBtn.BorderColor3 = COLORS.Border
         editBtn.Text = "Edit"
         editBtn.TextColor3 = COLORS.Text
-        editBtn.TextSize = 12
+        editBtn.TextSize = 11
         editBtn.Font = Enum.Font.GothamBold
         editBtn.AutoButtonColor = false
         editBtn.Parent = row
 
+        -- Unbind button (anchored from right: -45)
         local unbindBtn = Instance.new("TextButton")
-        unbindBtn.Size = UDim2.new(0, 50, 0, 22)
-        unbindBtn.Position = UDim2.new(0.6, 156, 0.5, -11)
+        unbindBtn.Size = UDim2.new(0, 45, 0, 22)
+        unbindBtn.Position = UDim2.new(1, -45, 0.5, -11)
         unbindBtn.BackgroundColor3 = Color3.fromRGB(90, 30, 30)
         unbindBtn.BorderSizePixel = 1
         unbindBtn.BorderColor3 = Color3.fromRGB(150, 50, 50)
         unbindBtn.Text = "Unbind"
         unbindBtn.TextColor3 = COLORS.Text
-        unbindBtn.TextSize = 12
+        unbindBtn.TextSize = 10
         unbindBtn.Font = Enum.Font.GothamBold
         unbindBtn.AutoButtonColor = false
         unbindBtn.Parent = row
