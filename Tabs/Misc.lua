@@ -1,5 +1,5 @@
 -- Tabs/Misc.lua
--- Misc tab: Anti-AFK, FPS Counter, Ping Counter toggles + Keybinds system + Plugins
+-- Misc tab: Anti-AFK, FPS Counter, Ping Counter toggles + Keybinds system
 -- Receives Context, returns tab content frame
 
 return function(Context)
@@ -187,13 +187,6 @@ return function(Context)
 
         elseif funcName == "Boost FPS" then
             showBindNotification("Boost FPS", true)
-        else
-            -- Check if it's a plugin
-            if Features.Plugins then
-                Features.Plugins.ExecuteByBind(funcName)
-                local isRunning = Features.Plugins.IsRunning(funcName)
-                showBindNotification(funcName, isRunning)
-            end
         end
     end
 
@@ -267,114 +260,12 @@ return function(Context)
     end
 
     -- ============================================================
-    -- PLUGINS HEADER (collapsible)
-    -- ============================================================
-    local pluginsHeader = Instance.new("Frame")
-    pluginsHeader.Name = "PluginsHeader"
-    pluginsHeader.Size = UDim2.new(1, -20, 0, 30)
-    pluginsHeader.Position = UDim2.new(0, 10, 0, 140)
-    pluginsHeader.BackgroundColor3 = COLORS.Background
-    pluginsHeader.BorderSizePixel = 0
-    pluginsHeader.Parent = content
-
-    local pluginsLabel = Instance.new("TextLabel")
-    pluginsLabel.Size = UDim2.new(1, -80, 1, 0)
-    pluginsLabel.Position = UDim2.new(0, 5, 0, 0)
-    pluginsLabel.BackgroundTransparency = 1
-    pluginsLabel.Text = "Plugins"
-    pluginsLabel.TextColor3 = COLORS.Text
-    pluginsLabel.TextSize = 14
-    pluginsLabel.Font = Enum.Font.Gotham
-    pluginsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    pluginsLabel.Parent = pluginsHeader
-
-    -- Expand/collapse button
-    local pluginsToggleBtn = Instance.new("TextButton")
-    pluginsToggleBtn.Name = "PluginsToggle"
-    pluginsToggleBtn.Size = UDim2.new(0, 30, 0, 22)
-    pluginsToggleBtn.Position = UDim2.new(1, -70, 0.5, -11)
-    pluginsToggleBtn.BackgroundColor3 = COLORS.Background
-    pluginsToggleBtn.BorderSizePixel = 1
-    pluginsToggleBtn.BorderColor3 = COLORS.Border
-    pluginsToggleBtn.Text = "\u{25BC}"
-    pluginsToggleBtn.TextColor3 = COLORS.Text
-    pluginsToggleBtn.TextSize = 12
-    pluginsToggleBtn.Font = Enum.Font.GothamBold
-    pluginsToggleBtn.AutoButtonColor = false
-    pluginsToggleBtn.Parent = pluginsHeader
-
-    -- Add (+) button
-    local pluginsAddBtn = Instance.new("TextButton")
-    pluginsAddBtn.Name = "PluginsAdd"
-    pluginsAddBtn.Size = UDim2.new(0, 30, 0, 22)
-    pluginsAddBtn.Position = UDim2.new(1, -35, 0.5, -11)
-    pluginsAddBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 50)
-    pluginsAddBtn.BorderSizePixel = 1
-    pluginsAddBtn.BorderColor3 = Color3.fromRGB(0, 150, 75)
-    pluginsAddBtn.Text = "+"
-    pluginsAddBtn.TextColor3 = COLORS.Text
-    pluginsAddBtn.TextSize = 16
-    pluginsAddBtn.Font = Enum.Font.GothamBold
-    pluginsAddBtn.AutoButtonColor = false
-    pluginsAddBtn.Parent = pluginsHeader
-
-    pluginsAddBtn.MouseEnter:Connect(function()
-        TweenService:Create(pluginsAddBtn, TWEEN.Hover, {BackgroundColor3 = Color3.fromRGB(0, 130, 65)}):Play()
-    end)
-    pluginsAddBtn.MouseLeave:Connect(function()
-        TweenService:Create(pluginsAddBtn, TWEEN.Hover, {BackgroundColor3 = Color3.fromRGB(0, 100, 50)}):Play()
-    end)
-
-    -- Plugins Frame (collapsible list)
-    local pluginsFrame = Instance.new("Frame")
-    pluginsFrame.Name = "Plugins_List"
-    pluginsFrame.Size = UDim2.new(1, -20, 0, 0)
-    pluginsFrame.Position = UDim2.new(0, 10, 0, 175)
-    pluginsFrame.BackgroundColor3 = COLORS.Background
-    pluginsFrame.BorderSizePixel = 1
-    pluginsFrame.BorderColor3 = COLORS.Border
-    pluginsFrame.ClipsDescendants = true
-    pluginsFrame.Visible = true
-    pluginsFrame.Parent = content
-
-    -- Scrollable plugin list inside pluginsFrame
-    local pluginsScroll = Instance.new("ScrollingFrame")
-    pluginsScroll.Name = "PluginsScroll"
-    pluginsScroll.Size = UDim2.new(1, 0, 1, 0)
-    pluginsScroll.BackgroundTransparency = 1
-    pluginsScroll.BorderSizePixel = 0
-    pluginsScroll.ScrollBarThickness = 4
-    pluginsScroll.ScrollBarImageColor3 = COLORS.Border
-    pluginsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    pluginsScroll.Parent = pluginsFrame
-
-    -- ============================================================
-    -- REFRESH PLUGIN LIST
-    -- ============================================================
-    local function refreshPluginsList()
-        if Context.Features.Plugins then
-            local contentHeight = Context.Features.Plugins.RefreshListUI(pluginsScroll, refreshPluginsList)
-            pluginsScroll.CanvasSize = UDim2.new(0, 0, 0, contentHeight)
-        end
-    end
-
-    -- Add button opens editor
-    pluginsAddBtn.MouseButton1Click:Connect(function()
-        if Context.Features.Plugins then
-            Context.Features.Plugins.OpenEditor(nil, nil, function()
-                refreshPluginsList()
-                refreshBindList()
-            end)
-        end
-    end)
-
-    -- ============================================================
     -- BINDS HEADER (collapsible)
     -- ============================================================
     local bindsHeader = Instance.new("Frame")
     bindsHeader.Name = "BindsHeader"
     bindsHeader.Size = UDim2.new(1, -20, 0, 30)
-    bindsHeader.Position = UDim2.new(0, 10, 0, 180)
+    bindsHeader.Position = UDim2.new(0, 10, 0, 140)
     bindsHeader.BackgroundColor3 = COLORS.Background
     bindsHeader.BorderSizePixel = 0
     bindsHeader.Parent = content
@@ -408,7 +299,7 @@ return function(Context)
     local bindsFrame = Instance.new("Frame")
     bindsFrame.Name = "Binds_Settings"
     bindsFrame.Size = UDim2.new(1, -20, 0, 0)
-    bindsFrame.Position = UDim2.new(0, 10, 0, 215)
+    bindsFrame.Position = UDim2.new(0, 10, 0, 175)
     bindsFrame.BackgroundColor3 = COLORS.Background
     bindsFrame.BorderSizePixel = 1
     bindsFrame.BorderColor3 = COLORS.Border
@@ -428,7 +319,7 @@ return function(Context)
     bindsScroll.Parent = bindsFrame
 
     -- ============================================================
-    -- REFRESH BIND LIST (includes plugins)
+    -- REFRESH BIND LIST
     -- ============================================================
     -- Ensure binds table exists
     FeatureState.binds = FeatureState.binds or {}
@@ -600,28 +491,7 @@ return function(Context)
             y = y + 36
         end
 
-        -- Add plugin functions (include even if not bound yet)
-        if Context.Features.Plugins and Context.Features.Plugins.GetAll then
-            local plugins = Context.Features.Plugins.GetAll()
-            if plugins and type(plugins) == "table" then
-                for _, plugin in ipairs(plugins) do
-                    -- Depending on Plugins.GetAll return format: accept both table of names or table of tables with .name
-                    local pname = nil
-                    if type(plugin) == "string" then
-                        pname = plugin
-                    elseif type(plugin) == "table" and plugin.name then
-                        pname = plugin.name
-                    end
-                    if pname and not added[pname] then
-                        added[pname] = true
-                        createBindRow(bindsScroll, y, pname)
-                        y = y + 36
-                    end
-                end
-            end
-        end
-
-        -- Also add any orphan binds that are set but not in builtins/plugins
+        -- Also add any orphan binds that are set but not in builtins
         for name, _ in pairs(FeatureState.binds) do
             if not added[name] then
                 added[name] = true
@@ -634,33 +504,12 @@ return function(Context)
     end
 
     -- Initial refresh
-    refreshPluginsList()
     refreshBindList()
 
-    -- When plugins change (Add/Edit/Delete), caller refreshPluginsList will also call refreshBindList via the editor callback
-    -- But also hook a simple loop to keep plugin list up-to-date in case plugins UI modifies FeatureState directly
-    if Context.Features.Plugins and Context.Features.Plugins.RefreshListUI then
-        -- Nothing to attach here; RefreshListUI is invoked by our UI already.
-    end
-
     -- ============================================================
-    -- COLLAPSIBLE BEHAVIOR FOR PLUGINS & BINDS
+    -- COLLAPSIBLE BEHAVIOR FOR BINDS
     -- ============================================================
-    local pluginsExpanded = true
     local bindsExpanded = true
-
-    local function togglePlugins()
-        pluginsExpanded = not pluginsExpanded
-        if pluginsExpanded then
-            -- Expand (set to a reasonable height based on content)
-            local targetH = math.max(100, tonumber(pluginsScroll.CanvasSize.Y.Offset) or 100)
-            pluginsFrame:TweenSize(UDim2.new(1, -20, 0, targetH), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
-            pluginsToggleBtn.Text = "\u{25B2}"
-        else
-            pluginsFrame:TweenSize(UDim2.new(1, -20, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
-            pluginsToggleBtn.Text = "\u{25BC}"
-        end
-    end
 
     local function toggleBinds()
         bindsExpanded = not bindsExpanded
@@ -674,14 +523,10 @@ return function(Context)
         end
     end
 
-    pluginsToggleBtn.MouseButton1Click:Connect(togglePlugins)
     bindsToggleBtn.MouseButton1Click:Connect(toggleBinds)
 
     -- Ensure initial sizes are set after initial content is known
     task.delay(0.05, function()
-        -- Plugins
-        local pH = math.max(100, tonumber(pluginsScroll.CanvasSize.Y.Offset) or 100)
-        pluginsFrame.Size = UDim2.new(1, -20, 0, pH)
         -- Binds
         local bH = math.max(140, tonumber(bindsScroll.CanvasSize.Y.Offset) or 140)
         bindsFrame.Size = UDim2.new(1, -20, 0, bH)
