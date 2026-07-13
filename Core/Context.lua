@@ -92,8 +92,6 @@ return {
         colorMenuConnections = {},
         bindListening = nil,
         bindInputConnection = nil,
-        pluginEditorOpen = false,
-        pluginNamePromptOpen = false,
     },
 
     -- ============================================================
@@ -162,12 +160,6 @@ return {
         -- Binds
         binds = {},
         bindGlobalConnection = nil,
-
-        -- Plugins
-        plugins = {},
-        pluginRunningThreads = {},
-        pluginEditorWindow = nil,
-        pluginNamePromptWindow = nil,
     },
 
     -- ============================================================
