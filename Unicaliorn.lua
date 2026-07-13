@@ -131,8 +131,7 @@ local featureFiles = {
     "Noclip",
     "Speedhack",
     "Fly",
-    "InfinityJump",
-    "Plugins"
+    "InfinityJump"
 }
 
 for _, name in ipairs(featureFiles) do
