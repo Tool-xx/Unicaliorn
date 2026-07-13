@@ -295,27 +295,22 @@ return function(Context)
     bindsToggleBtn.AutoButtonColor = false
     bindsToggleBtn.Parent = bindsHeader
 
-    -- Binds ScrollFrame (directly in content, no extra Frame wrapper)
-    local bindsScroll = Instance.new("ScrollingFrame")
-    bindsScroll.Name = "BindsScroll"
-    bindsScroll.Size = UDim2.new(1, -20, 0, 0)
-    bindsScroll.Position = UDim2.new(0, 10, 0, 175)
-    bindsScroll.BackgroundColor3 = COLORS.Background
-    bindsScroll.BorderSizePixel = 1
-    bindsScroll.BorderColor3 = COLORS.Border
-    bindsScroll.ScrollBarThickness = 4
-    bindsScroll.ScrollBarImageColor3 = COLORS.Border
-    bindsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    bindsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    bindsScroll.Parent = content
+    -- Binds Frame (plain Frame, NOT ScrollingFrame — content scrolls everything)
+    local bindsFrame = Instance.new("Frame")
+    bindsFrame.Name = "BindsFrame"
+    bindsFrame.Size = UDim2.new(1, -20, 0, 0)
+    bindsFrame.Position = UDim2.new(0, 10, 0, 175)
+    bindsFrame.BackgroundColor3 = COLORS.Background
+    bindsFrame.BorderSizePixel = 1
+    bindsFrame.BorderColor3 = COLORS.Border
+    bindsFrame.ClipsDescendants = true
+    bindsFrame.Parent = content
 
     -- ============================================================
     -- REFRESH BIND LIST
     -- ============================================================
-    -- Ensure binds table exists
     FeatureState.binds = FeatureState.binds or {}
 
-    -- List of built-in functions that can be bound
     local builtinFunctions = {
         "Rejoin",
         "Server Hop",
@@ -450,7 +445,7 @@ return function(Context)
     end
 
     function refreshBindList()
-        for _, child in ipairs(bindsScroll:GetChildren()) do
+        for _, child in ipairs(bindsFrame:GetChildren()) do
             if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("TextLabel") then
                 child:Destroy()
             end
@@ -461,19 +456,28 @@ return function(Context)
 
         for _, name in ipairs(builtinFunctions) do
             added[name] = true
-            createBindRow(bindsScroll, y, name)
+            createBindRow(bindsFrame, y, name)
             y = y + 36
         end
 
         for name, _ in pairs(FeatureState.binds) do
             if not added[name] then
                 added[name] = true
-                createBindRow(bindsScroll, y, name)
+                createBindRow(bindsFrame, y, name)
                 y = y + 36
             end
         end
 
-        bindsScroll.CanvasSize = UDim2.new(0, 0, 0, y)
+        -- Update content CanvasSize to include bindsFrame height
+        local totalContentHeight = 175 + y + 20
+        content.CanvasSize = UDim2.new(0, 0, 0, totalContentHeight)
+
+        -- If expanded, resize bindsFrame to fit all rows
+        if bindsExpanded then
+            bindsFrame.Size = UDim2.new(1, -20, 0, y + 8)
+        end
+
+        return y + 8
     end
 
     -- Initial refresh
@@ -483,15 +487,15 @@ return function(Context)
     -- COLLAPSIBLE BEHAVIOR FOR BINDS
     -- ============================================================
     local bindsExpanded = true
-    local BINDS_MAX_HEIGHT = 200  -- max visible height when expanded
 
     local function toggleBinds()
         bindsExpanded = not bindsExpanded
         if bindsExpanded then
-            bindsScroll.Size = UDim2.new(1, -20, 0, BINDS_MAX_HEIGHT)
+            local targetH = refreshBindList()
+            bindsFrame:TweenSize(UDim2.new(1, -20, 0, targetH), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
             bindsToggleBtn.Text = "\u{25B2}"
         else
-            bindsScroll.Size = UDim2.new(1, -20, 0, 0)
+            bindsFrame:TweenSize(UDim2.new(1, -20, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
             bindsToggleBtn.Text = "\u{25BC}"
         end
     end
@@ -500,7 +504,8 @@ return function(Context)
 
     -- Set initial size
     task.delay(0.05, function()
-        bindsScroll.Size = UDim2.new(1, -20, 0, BINDS_MAX_HEIGHT)
+        local targetH = refreshBindList()
+        bindsFrame.Size = UDim2.new(1, -20, 0, targetH)
     end)
 
     -- Register tab
