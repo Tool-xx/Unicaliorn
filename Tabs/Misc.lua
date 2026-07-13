@@ -296,7 +296,7 @@ return function(Context)
     pluginsToggleBtn.BackgroundColor3 = COLORS.Background
     pluginsToggleBtn.BorderSizePixel = 1
     pluginsToggleBtn.BorderColor3 = COLORS.Border
-    pluginsToggleBtn.Text = "▼"
+    pluginsToggleBtn.Text = "\u{25BC}"
     pluginsToggleBtn.TextColor3 = COLORS.Text
     pluginsToggleBtn.TextSize = 12
     pluginsToggleBtn.Font = Enum.Font.GothamBold
@@ -397,7 +397,7 @@ return function(Context)
     bindsToggleBtn.BackgroundColor3 = COLORS.Background
     bindsToggleBtn.BorderSizePixel = 1
     bindsToggleBtn.BorderColor3 = COLORS.Border
-    bindsToggleBtn.Text = "▼"
+    bindsToggleBtn.Text = "\u{25BC}"
     bindsToggleBtn.TextColor3 = COLORS.Text
     bindsToggleBtn.TextSize = 12
     bindsToggleBtn.Font = Enum.Font.GothamBold
@@ -430,97 +430,268 @@ return function(Context)
     -- ============================================================
     -- REFRESH BIND LIST (includes plugins)
     -- ============================================================
-    local bindRows = {}
-    local function refreshBindList()
-        -- Clear existing
+    -- Ensure binds table exists
+    FeatureState.binds = FeatureState.binds or {}
+
+    -- List of built-in functions that can be bound
+    local builtinFunctions = {
+        "Rejoin",
+        "Server Hop",
+        "Anti-AFK",
+        "FPS Counter",
+        "Ping Counter",
+        "Noclip",
+        "Speedhack",
+        "Fly",
+        "Infinite Jump",
+        "ESP",
+        "Boost FPS",
+    }
+
+    local function formatKeyName(key)
+        if not key then return "None" end
+        -- If stored as Enum.KeyCode or string
+        if typeof(key) == "EnumItem" then
+            return key.Name
+        elseif type(key) == "string" then
+            return key
+        else
+            return tostring(key)
+        end
+    end
+
+    local listeningConn = nil
+
+    local function stopListening()
+        if listeningConn then
+            listeningConn:Disconnect()
+            listeningConn = nil
+        end
+        Context.State.bindListening = false
+    end
+
+    local function startListening(editBtn, funcName, keyDisplay)
+        -- Guard: don't allow nested listening
+        if Context.State.bindListening then return end
+        Context.State.bindListening = true
+        editBtn.Text = "Press..."
+        -- Capture single keypress
+        listeningConn = UserInputService.InputBegan:Connect(function(input, processed)
+            if processed then return end
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            local keyCode = input.KeyCode
+            -- Save bind
+            FeatureState.binds[funcName] = keyCode
+            stopListening()
+            showBindNotification(funcName, true)
+            -- Update display
+            keyDisplay.Text = formatKeyName(keyCode)
+            -- minor delay then refresh the UI to ensure consistent ordering/heights
+            task.delay(0.05, function() refreshBindList() end)
+        end)
+
+        -- Also listen for Escape to cancel
+        listeningConn, listeningConnCancel = listeningConn, listeningConn
+    end
+
+    local function createBindRow(parent, yOffset, funcName)
+        local row = Instance.new("Frame")
+        row.Name = "BindRow_" .. funcName:gsub("%s", "_")
+        row.Size = UDim2.new(1, 0, 0, 30)
+        row.Position = UDim2.new(0, 0, 0, yOffset)
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel = 0
+        row.Parent = parent
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.55, -8, 1, 0)
+        label.Position = UDim2.new(0, 8, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = funcName
+        label.TextColor3 = COLORS.Text
+        label.TextSize = 14
+        label.Font = Enum.Font.Gotham
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = row
+
+        local keyDisplay = Instance.new("TextButton")
+        keyDisplay.Size = UDim2.new(0, 90, 0, 22)
+        keyDisplay.Position = UDim2.new(0.6, 0, 0.5, -11)
+        keyDisplay.BackgroundColor3 = COLORS.Background
+        keyDisplay.BorderSizePixel = 1
+        keyDisplay.BorderColor3 = COLORS.Border
+        keyDisplay.Text = formatKeyName(FeatureState.binds[funcName])
+        keyDisplay.TextColor3 = COLORS.Text
+        keyDisplay.TextSize = 12
+        keyDisplay.Font = Enum.Font.GothamBold
+        keyDisplay.AutoButtonColor = false
+        keyDisplay.Parent = row
+
+        local editBtn = Instance.new("TextButton")
+        editBtn.Size = UDim2.new(0, 50, 0, 22)
+        editBtn.Position = UDim2.new(0.6, 100, 0.5, -11)
+        editBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        editBtn.BorderSizePixel = 1
+        editBtn.BorderColor3 = COLORS.Border
+        editBtn.Text = "Edit"
+        editBtn.TextColor3 = COLORS.Text
+        editBtn.TextSize = 12
+        editBtn.Font = Enum.Font.GothamBold
+        editBtn.AutoButtonColor = false
+        editBtn.Parent = row
+
+        local unbindBtn = Instance.new("TextButton")
+        unbindBtn.Size = UDim2.new(0, 50, 0, 22)
+        unbindBtn.Position = UDim2.new(0.6, 156, 0.5, -11)
+        unbindBtn.BackgroundColor3 = Color3.fromRGB(90, 30, 30)
+        unbindBtn.BorderSizePixel = 1
+        unbindBtn.BorderColor3 = Color3.fromRGB(150, 50, 50)
+        unbindBtn.Text = "Unbind"
+        unbindBtn.TextColor3 = COLORS.Text
+        unbindBtn.TextSize = 12
+        unbindBtn.Font = Enum.Font.GothamBold
+        unbindBtn.AutoButtonColor = false
+        unbindBtn.Parent = row
+
+        -- Edit click -> start listening for next key
+        editBtn.MouseButton1Click:Connect(function()
+            -- If currently listening, cancel
+            if Context.State.bindListening then
+                stopListening()
+                editBtn.Text = "Edit"
+                keyDisplay.Text = formatKeyName(FeatureState.binds[funcName])
+                return
+            end
+
+            startListening(editBtn, funcName, keyDisplay)
+        end)
+
+        -- Clicking keyDisplay also starts listening
+        keyDisplay.MouseButton1Click:Connect(function()
+            editBtn.MouseButton1Click:Fire()
+        end)
+
+        -- Unbind click
+        unbindBtn.MouseButton1Click:Connect(function()
+            FeatureState.binds[funcName] = nil
+            showBindNotification(funcName, false)
+            refreshBindList()
+        end)
+
+        return row
+    end
+
+    function refreshBindList()
+        -- Clear existing rows
         for _, child in ipairs(bindsScroll:GetChildren()) do
-            if child:IsA("Frame") then
+            if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("TextLabel") then
                 child:Destroy()
             end
         end
-        bindRows = {}
 
-        local baseFunctions = {
-            "Rejoin",
-            "Server Hop",
-            "Anti-AFK",
-            "FPS Counter",
-            "Ping Counter",
-            "Noclip",
-            "Speedhack",
-            "Fly",
-            "Infinite Jump",
-            "ESP",
-            "Boost FPS",
-        }
+        local rows = {}
+        local added = {} -- set for dedupe
 
-        -- Add plugin names to bind list
-        local allFunctions = {}
-        for _, name in ipairs(baseFunctions) do
-            table.insert(allFunctions, name)
-        end
-        for _, plugin in ipairs(FeatureState.plugins) do
-            table.insert(allFunctions, plugin.name)
+        -- Add builtins first
+        local y = 4
+        for _, name in ipairs(builtinFunctions) do
+            added[name] = true
+            createBindRow(bindsScroll, y, name)
+            y = y + 36
         end
 
-        local yOff = 8
-        for _, funcName in ipairs(allFunctions) do
-            local bindControl = Components.createBindButton(bindsScroll, yOff, funcName, nil)
-            table.insert(bindRows, bindControl)
-            yOff = yOff + 35
+        -- Add plugin functions (include even if not bound yet)
+        if Context.Features.Plugins and Context.Features.Plugins.GetAll then
+            local plugins = Context.Features.Plugins.GetAll()
+            if plugins and type(plugins) == "table" then
+                for _, plugin in ipairs(plugins) do
+                    -- Depending on Plugins.GetAll return format: accept both table of names or table of tables with .name
+                    local pname = nil
+                    if type(plugin) == "string" then
+                        pname = plugin
+                    elseif type(plugin) == "table" and plugin.name then
+                        pname = plugin.name
+                    end
+                    if pname and not added[pname] then
+                        added[pname] = true
+                        createBindRow(bindsScroll, y, pname)
+                        y = y + 36
+                    end
+                end
+            end
         end
 
-        local bindsContentHeight = yOff + 5
-        bindsScroll.CanvasSize = UDim2.new(0, 0, 0, bindsContentHeight)
-        return bindsContentHeight
-    end
-
-    local bindsContentHeight = refreshBindList()
-
-    -- ============================================================
-    -- ANIMATE PLUGINS EXPAND/COLLAPSE
-    -- ============================================================
-    local pluginsOpen = false
-    local pluginsContentHeight = 0
-
-    pluginsToggleBtn.MouseButton1Click:Connect(function()
-        pluginsOpen = not pluginsOpen
-        if pluginsOpen then
-            pluginsToggleBtn.Text = "▲"
-            -- Calculate height based on plugin count
-            pluginsContentHeight = math.min(200, #FeatureState.plugins * 37 + 10)
-            if pluginsContentHeight < 40 then pluginsContentHeight = 40 end
-            TweenService:Create(pluginsFrame, TWEEN.Open, {Size = UDim2.new(1, -20, 0, pluginsContentHeight)}):Play()
-            -- Move binds down
-            TweenService:Create(bindsHeader, TWEEN.Open, {Position = UDim2.new(0, 10, 0, 175 + pluginsContentHeight + 10)}):Play()
-            TweenService:Create(bindsFrame, TWEEN.Open, {Position = UDim2.new(0, 10, 0, 175 + pluginsContentHeight + 45)}):Play()
-        else
-                        bindsToggleBtn.Text = "▼"
-            TweenService:Create(bindsFrame, TWEEN.Close, {Size = UDim2.new(1, -20, 0, 0)}):Play()
+        -- Also add any orphan binds that are set but not in builtins/plugins
+        for name, _ in pairs(FeatureState.binds) do
+            if not added[name] then
+                added[name] = true
+                createBindRow(bindsScroll, y, name)
+                y = y + 36
+            end
         end
-        updateCanvasSize()
-    end)
 
-    -- ============================================================
-    -- UPDATE CANVAS SIZE
-    -- ============================================================
-    local function updateCanvasSize()
-        local totalHeight = 200
-        if pluginsOpen then
-            totalHeight = totalHeight + pluginsContentHeight + 10
-        end
-        if bindsOpen then
-            totalHeight = totalHeight + math.min(300, bindsContentHeight + 10)
-        end
-        content.CanvasSize = UDim2.new(0, 0, 0, totalHeight + 20)
+        bindsScroll.CanvasSize = UDim2.new(0, 0, 0, y)
     end
 
     -- Initial refresh
     refreshPluginsList()
+    refreshBindList()
 
-    -- Register tab
-    Context.UI.Main.registerTabContent("Misc", content)
+    -- When plugins change (Add/Edit/Delete), caller refreshPluginsList will also call refreshBindList via the editor callback
+    -- But also hook a simple loop to keep plugin list up-to-date in case plugins UI modifies FeatureState directly
+    if Context.Features.Plugins and Context.Features.Plugins.RefreshListUI then
+        -- Nothing to attach here; RefreshListUI is invoked by our UI already.
+    end
 
-    print("[Tab] Misc loaded (with Plugins + Keybinds).")
+    -- ============================================================
+    -- COLLAPSIBLE BEHAVIOR FOR PLUGINS & BINDS
+    -- ============================================================
+    local pluginsExpanded = true
+    local bindsExpanded = true
+
+    local function togglePlugins()
+        pluginsExpanded = not pluginsExpanded
+        if pluginsExpanded then
+            -- Expand (set to a reasonable height based on content)
+            local targetH = math.max(100, tonumber(pluginsScroll.CanvasSize.Y.Offset) or 100)
+            pluginsFrame:TweenSize(UDim2.new(1, -20, 0, targetH), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            pluginsToggleBtn.Text = "\u{25B2}"
+        else
+            pluginsFrame:TweenSize(UDim2.new(1, -20, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            pluginsToggleBtn.Text = "\u{25BC}"
+        end
+    end
+
+    local function toggleBinds()
+        bindsExpanded = not bindsExpanded
+        if bindsExpanded then
+            local targetH = math.max(140, tonumber(bindsScroll.CanvasSize.Y.Offset) or 140)
+            bindsFrame:TweenSize(UDim2.new(1, -20, 0, targetH), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            bindsToggleBtn.Text = "\u{25B2}"
+        else
+            bindsFrame:TweenSize(UDim2.new(1, -20, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.25, true)
+            bindsToggleBtn.Text = "\u{25BC}"
+        end
+    end
+
+    pluginsToggleBtn.MouseButton1Click:Connect(togglePlugins)
+    bindsToggleBtn.MouseButton1Click:Connect(toggleBinds)
+
+    -- Ensure initial sizes are set after initial content is known
+    task.delay(0.05, function()
+        -- Plugins
+        local pH = math.max(100, tonumber(pluginsScroll.CanvasSize.Y.Offset) or 100)
+        pluginsFrame.Size = UDim2.new(1, -20, 0, pH)
+        -- Binds
+        local bH = math.max(140, tonumber(bindsScroll.CanvasSize.Y.Offset) or 140)
+        bindsFrame.Size = UDim2.new(1, -20, 0, bH)
+    end)
+
+    -- Register tab (ensure Main has register function)
+    if Context.UI.Main and Context.UI.Main.registerTabContent then
+        Context.UI.Main.registerTabContent("Misc", content)
+    end
+
+    print("[Tab] Misc loaded.")
     return content
 end
