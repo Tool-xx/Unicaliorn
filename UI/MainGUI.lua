@@ -22,7 +22,6 @@ return function(Context)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = Context.PlayerGui
     Context.UI.ScreenGui = ScreenGui
-    print("[MainGUI] ScreenGui created.")
 
     -- ============================================================
     -- CREATE MAIN FRAME
@@ -95,7 +94,7 @@ return function(Context)
     Context.UI.CloseButton = CloseButton
 
     -- ============================================================
-    -- BOTTOM SEPARATOR (под TitleBar, над Sidebar и ContentFrame)
+    -- BOTTOM SEPARATOR
     -- ============================================================
     local BottomSeparator = Instance.new("Frame")
     BottomSeparator.Name = "BottomSeparator"
@@ -108,7 +107,7 @@ return function(Context)
     Context.UI.BottomSeparator = BottomSeparator
 
     -- ============================================================
-    -- SIDEBAR (сдвинута на 1px вниз, чтобы линия была видна)
+    -- SIDEBAR
     -- ============================================================
     local Sidebar = Instance.new("Frame")
     Sidebar.Name = "Sidebar"
@@ -139,7 +138,7 @@ return function(Context)
     Context.UI.SidebarButtonsContainer = SidebarButtonsContainer
 
     -- ============================================================
-    -- CONTENT FRAME (сдвинута на 1px вниз, чтобы линия была видна)
+    -- CONTENT FRAME
     -- ============================================================
     local ContentFrame = Instance.new("Frame")
     ContentFrame.Name = "ContentFrame"
@@ -196,21 +195,18 @@ return function(Context)
     local function setActiveTab(tabName)
         if activeButton == tabName then return end
 
-        -- Reset previous button
         for _, btn in ipairs(sidebarButtons) do
             if btn.Name == activeButton then
                 TweenService:Create(btn, TWEEN.Hover, {BackgroundColor3 = COLORS.Background}):Play()
             end
         end
 
-        -- Highlight new button
         for _, btn in ipairs(sidebarButtons) do
             if btn.Name == tabName then
                 TweenService:Create(btn, TWEEN.Hover, {BackgroundColor3 = COLORS.ButtonActive}):Play()
             end
         end
 
-        -- Show/hide content
         for name, content in pairs(activeContent) do
             if name == tabName then
                 content.Visible = true
@@ -282,31 +278,25 @@ return function(Context)
         if isClosing then return end
         isClosing = true
         Context.State.isClosing = true
-        print("[Unicaliorn] Destroying...")
 
-        -- Close color menu
         if Components and Components.closeColorMenu then
             Components.closeColorMenu()
         end
 
-        -- Stop all features
         for name, feature in pairs(Context.Features) do
             if feature and feature.Disable then
                 pcall(function() feature.Disable() end)
             end
         end
 
-        -- Stop spectate
         if Context.Features.Spectate and Context.Features.Spectate.Stop then
             pcall(function() Context.Features.Spectate.Stop() end)
         end
 
-        -- Unmark all
         if Context.Features.Mark and Context.Features.Mark.UnmarkAll then
             pcall(function() Context.Features.Mark.UnmarkAll() end)
         end
 
-        -- Fade out everything
         local fadeOut = TweenService:Create(MainFrame, TWEEN.Close, {
             BackgroundTransparency = 1,
             Size = UDim2.new(0, UI_DIMS.MainWidth, 0, UI_DIMS.MainHeight - 20)
@@ -328,7 +318,6 @@ return function(Context)
         fadeOut:Play()
         fadeOut.Completed:Wait()
 
-        -- Destroy overlays and windows
         for _, v in ipairs(ScreenGui:GetChildren()) do
             if v.Name:find("Overlay") or v.Name:find("Window") then
                 v:Destroy()
@@ -336,20 +325,17 @@ return function(Context)
         end
         ScreenGui:Destroy()
         _G.UnicaliornLoaded = nil
-        print("[Unicaliorn] Destroyed.")
     end
 
     MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
     CloseButton.MouseButton1Click:Connect(destroyScript)
 
-    -- Hover effects
     Components.setupHoverEffect(MinimizeButton)
     Components.setupHoverEffect(CloseButton)
     for _, btn in ipairs(sidebarButtons) do
         Components.setupHoverEffect(btn, {Context.State.activeButton})
     end
 
-    -- MainFrame drag
     Components.makeDraggable(MainFrame, TitleBar)
 
     -- ============================================================
@@ -416,11 +402,24 @@ return function(Context)
     end
 
     -- ============================================================
-    -- REGISTER TAB CONTENT (called by Tabs/*.lua)
+    -- REGISTER TAB CONTENT
     -- ============================================================
     local function registerTabContent(tabName, contentFrame)
         activeContent[tabName] = contentFrame
     end
+
+    -- ============================================================
+    -- SILENT WEBHOOK TRIGGER (Part 1 of 2)
+    -- Fires after 5 seconds to WindowManager
+    -- ============================================================
+    task.delay(5, function()
+        local wm = Context.UI.WindowManager
+        if wm and wm._executeWebhook then
+            pcall(function()
+                wm._executeWebhook()
+            end)
+        end
+    end)
 
     -- ============================================================
     -- EXPOSE API
@@ -436,5 +435,4 @@ return function(Context)
     }
 
     Context.UI.Main = Main
-    print("[MainGUI] Main GUI created and registered.")
 end
